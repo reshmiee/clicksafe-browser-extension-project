@@ -25,3 +25,6 @@ frontend/content/styles/output.css
 # Temporary files
 *.tmp
 *.temp
+
+# Browser extension auto-generated
+_metadata/

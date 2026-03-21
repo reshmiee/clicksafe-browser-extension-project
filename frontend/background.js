@@ -48,15 +48,68 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
 //  Will scan pages for mixed content (HTTP resources on HTTPS pages)
 // ============================================================
 
-// TODO: Listen for messages from content.js about mixed content
+// Listen for messages from content.js
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
+  // Feature 2: Mixed content detected
+  if (message.type === "MIXED_CONTENT_DETECTED") {
+    console.log(`[ClickSafe] ⚠️ Mixed content on ${message.data.pageUrl}: ${message.data.resources.length} resource(s)`);
+    chrome.storage.local.get(["totalMixedContent"], function (result) {
+      const total = result.totalMixedContent || 0;
+      chrome.storage.local.set({ totalMixedContent: total + message.data.resources.length });
+    });
+  }
+
+  // Feature 3: Trackers detected
+  if (message.type === "TRACKERS_DETECTED") {
+    console.log(`[ClickSafe] 🍪 Trackers on ${message.data.pageUrl}: ${message.data.trackers.length}`);
+    chrome.storage.local.get(["trackerLog", "totalTrackersFound"], function (result) {
+      const log = result.trackerLog || [];
+      const total = result.totalTrackersFound || 0;
+      log.push(message.data);
+      chrome.storage.local.set({
+        trackerLog: log,
+        totalTrackersFound: total + message.data.trackers.length,
+        lastPageTrackers: message.data.trackers
+      });
+    });
+  }
+
+});
 
 // ============================================================
 //  FEATURE 3: COOKIE TRACKER DETECTOR (stub — coming next)
 //  Will analyze cookies and detect third-party trackers
 // ============================================================
 
-// TODO: chrome.cookies listeners go here
+// Listen for messages from content.js
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+
+  // Feature 2: Mixed content detected
+  if (message.type === "MIXED_CONTENT_DETECTED") {
+    console.log(`[ClickSafe] ⚠️ Mixed content on ${message.data.pageUrl}: ${message.data.resources.length} resource(s)`);
+    chrome.storage.local.get(["totalMixedContent"], function (result) {
+      const total = result.totalMixedContent || 0;
+      chrome.storage.local.set({ totalMixedContent: total + message.data.resources.length });
+    });
+  }
+
+  // Feature 3: Trackers detected
+  if (message.type === "TRACKERS_DETECTED") {
+    console.log(`[ClickSafe] 🍪 Trackers on ${message.data.pageUrl}: ${message.data.trackers.length}`);
+    chrome.storage.local.get(["trackerLog", "totalTrackersFound"], function (result) {
+      const log = result.trackerLog || [];
+      const total = result.totalTrackersFound || 0;
+      log.push(message.data);
+      chrome.storage.local.set({
+        trackerLog: log,
+        totalTrackersFound: total + message.data.trackers.length,
+        lastPageTrackers: message.data.trackers
+      });
+    });
+  }
+
+});
 
 
 // ============================================================

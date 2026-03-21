@@ -10,22 +10,7 @@
 //  Intercepts any http:// request and redirects to https://
 // ============================================================
 
-chrome.webRequest.onBeforeRequest.addListener(
-  function (details) {
-    // Only redirect main page navigations, not every resource
-    if (details.url.startsWith("http://")) {
-      const httpsUrl = details.url.replace("http://", "https://");
-      console.log(`[ClickSafe] Redirecting to HTTPS: ${httpsUrl}`);
-      return { redirectUrl: httpsUrl };
-    }
-  },
-  {
-    urls: ["http://*/*"],
-    types: ["main_frame"] // Only intercept main page loads, not images/scripts
-  },
-  ["blocking"]
-);
-
+// rules.json in frontend will handle this!
 
 // ============================================================
 //  FEATURE 1 (cont): ICON COLOR UPDATE

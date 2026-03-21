@@ -1,0 +1,63 @@
+{
+  "manifest_version": 3,
+  "name": "ClickSafe",
+  "version": "1.0.0",
+  "description": "Real-time browser security: HTTPS enforcement, tracker detection, link safety, and download scanning.",
+
+  "icons": {
+    "16": "assets/logo/16.png",
+    "48": "assets/logo/48.png",
+    "128": "assets/logo/128.png"
+  },
+
+  "action": {
+    "default_icon": {
+      "16": "assets/logo/16.png",
+      "48": "assets/logo/48.png"
+    },
+    "default_title": "ClickSafe"
+  },
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content/content.js"],
+      "css": ["content/styles/output.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "permissions": [
+    "tabs",
+    "storage",
+    "cookies",
+    "downloads",
+    "webRequest",
+    "activeTab",
+    "scripting",
+    "declarativeNetRequest"
+  ],
+
+  "host_permissions": [
+    "<all_urls>"
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "content/sidebar/sidebar.html",
+        "content/modal/modal.html",
+        "pages/settings/settings.html",
+        "assets/logo/16.png",
+        "assets/logo/48.png",
+        "assets/logo/128.png",
+        "assets/logo/16-red.png"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

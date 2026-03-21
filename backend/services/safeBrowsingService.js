@@ -5,10 +5,9 @@
 
 const fetch = require("node-fetch");
 
-const API_KEY = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
-const API_URL = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${API_KEY}`;
-
 async function checkUrl(url) {
+  const API_KEY = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+  const API_URL = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${API_KEY}`;
   try {
     const response = await fetch(API_URL, {
       method: "POST",
@@ -33,6 +32,7 @@ async function checkUrl(url) {
     });
 
     const data = await response.json();
+    console.log("[ClickSafe] Google API response:", JSON.stringify(data)); // ADD THIS
 
     // If matches array exists and has items, URL is dangerous
     if (data.matches && data.matches.length > 0) {

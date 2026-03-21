@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9fafb;
+      width: 300px;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .header {
+      background: #1e40af;
+      color: white;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .header h1 {
+      font-size: 18px;
+      font-weight: bold;
+    }
+
+    .header span {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+
+    .close-btn {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .section {
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .section h2 {
+      font-size: 13px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 12px;
+    }
+
+    .page-url {
+      font-size: 12px;
+      color: #374151;
+      word-break: break-all;
+      background: #f3f4f6;
+      padding: 8px;
+      border-radius: 6px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    .badge.secure { background: #dcfce7; color: #16a34a; }
+    .badge.insecure { background: #fee2e2; color: #dc2626; }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 1px solid #f3f4f6;
+      font-size: 14px;
+      color: #374151;
+    }
+
+    .stat-row:last-child { border-bottom: none; }
+
+    .stat-value {
+      font-weight: bold;
+      font-size: 16px;
+      color: #1e40af;
+    }
+
+    .stat-value.danger { color: #dc2626; }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+
+    .btn-primary {
+      background: #1e40af;
+      color: white;
+    }
+
+    .btn-secondary {
+      background: #f3f4f6;
+      color: #374151;
+      border: 1px solid #e5e7eb;
+    }
+
+    .footer {
+      padding: 16px;
+      text-align: center;
+      font-size: 11px;
+      color: #9ca3af;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <h1>🛡️ ClickSafe</h1>
+      <span>Security Report</span>
+    </div>
+    <button class="close-btn" id="close-btn">✕</button>
+  </div>
+
+  <!-- Current Page -->
+  <div class="section">
+    <h2>Current Page</h2>
+    <div class="page-url" id="page-url">Loading...</div>
+    <span class="badge" id="page-badge">Checking...</span>
+  </div>
+
+  <!-- This Page Stats -->
+  <div class="section">
+    <h2>This Page</h2>
+    <div class="stat-row">
+      <span>Trackers Found</span>
+      <span class="stat-value danger" id="stat-trackers">0</span>
+    </div>
+    <div class="stat-row">
+      <span>Mixed Content</span>
+      <span class="stat-value danger" id="stat-mixed">0</span>
+    </div>
+    <div class="stat-row">
+      <span>Links Checked</span>
+      <span class="stat-value" id="stat-links">0</span>
+    </div>
+  </div>
+
+  <!-- Session Stats -->
+  <div class="section">
+    <h2>Session Total</h2>
+    <div class="stat-row">
+      <span>Total Trackers</span>
+      <span class="stat-value danger" id="stat-total-trackers">0</span>
+    </div>
+    <div class="stat-row">
+      <span>Total Mixed Content</span>
+      <span class="stat-value danger" id="stat-total-mixed">0</span>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="section">
+    <button class="btn btn-secondary" id="settings-btn">⚙️ Settings</button>
+  </div>
+
+  <div class="footer">ClickSafe v1.0.0</div>
+
+  <script src="sidebar.js"></script>
+</body>
+</html>

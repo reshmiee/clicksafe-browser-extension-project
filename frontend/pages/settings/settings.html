@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>ClickSafe Settings</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f4f6;
+      min-height: 100vh;
+      padding: 32px;
+      color: #111827;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: bold;
+      color: #1e40af;
+    }
+
+    .header p {
+      font-size: 14px;
+      color: #6b7280;
+    }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .card h2 {
+      font-size: 16px;
+      font-weight: bold;
+      color: #111827;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .toggle-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .toggle-row:last-child { border-bottom: none; }
+
+    .toggle-label { font-size: 14px; color: #374151; }
+    .toggle-desc { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #d1d5db;
+      border-radius: 24px;
+      transition: 0.3s;
+    }
+
+    .toggle-slider:before {
+      content: "";
+      position: absolute;
+      height: 18px; width: 18px;
+      left: 3px; bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    input:checked + .toggle-slider { background: #1e40af; }
+    input:checked + .toggle-slider:before { transform: translateX(20px); }
+
+    .whitelist-input {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .whitelist-input input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+    }
+
+    .whitelist-input input:focus { border-color: #1e40af; }
+
+    .btn-add {
+      background: #1e40af;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .whitelist-items { list-style: none; }
+
+    .whitelist-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: #f9fafb;
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #374151;
+    }
+
+    .btn-remove {
+      background: none;
+      border: none;
+      color: #dc2626;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .btn-save {
+      background: #1e40af;
+      color: white;
+      border: none;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+      flex: 1;
+    }
+
+    .btn-reset {
+      background: #f3f4f6;
+      color: #6b7280;
+      border: 1px solid #e5e7eb;
+      padding: 12px 32px;
+      border-radius: 8px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .success-msg {
+      display: none;
+      background: #dcfce7;
+      color: #16a34a;
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Header -->
+    <div class="header">
+      <div>
+        <h1>🛡️ ClickSafe Settings</h1>
+        <p>Customize your security preferences</p>
+      </div>
+    </div>
+
+    <!-- Feature Toggles -->
+    <div class="card">
+      <h2>Features</h2>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Auto-HTTPS Redirect</div>
+          <div class="toggle-desc">Automatically redirect HTTP to HTTPS</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-https" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Cookie Tracker Detection</div>
+          <div class="toggle-desc">Detect and log tracking scripts</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-cookies" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Link Safety Checking</div>
+          <div class="toggle-desc">Check links on hover via Safe Browsing API</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-links" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Download Scanning</div>
+          <div class="toggle-desc">Scan downloads before they complete</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-downloads" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Whitelist -->
+    <div class="card">
+      <h2>Trusted Websites (Whitelist)</h2>
+      <div class="whitelist-input">
+        <input type="text" id="whitelist-input" placeholder="e.g. example.com" />
+        <button class="btn-add" id="add-whitelist">Add</button>
+      </div>
+      <ul class="whitelist-items" id="whitelist-list"></ul>
+    </div>
+
+    <!-- Notifications -->
+    <div class="card">
+      <h2>Notifications</h2>
+      <div class="toggle-row">
+        <div>
+          <div class="toggle-label">Show Warning Modals</div>
+          <div class="toggle-desc">Display popups for dangerous links/downloads</div>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="toggle-modals" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Save / Reset -->
+    <div class="actions">
+      <button class="btn-save" id="save-btn">Save Changes</button>
+      <button class="btn-reset" id="reset-btn">Reset to Defaults</button>
+    </div>
+    <div class="success-msg" id="success-msg">Settings saved successfully!</div>
+
+  </div>
+  <script src="settings.js"></script>
+</body>
+</html>

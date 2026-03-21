@@ -113,13 +113,112 @@ function scanForTrackingScripts() {
 // Run tracker scan on page load
 scanForTrackingScripts();
 
-
 // ============================================================
-//  FEATURE 4: LINK HOVER PREVIEW (stub — coming after backend)
+//  FEATURE 4: LINK HOVER PREVIEW
+//  Checks every link on hover against backend API
 // ============================================================
 
-// TODO: Add mouseenter listeners on <a> tags here
 
+// Keep track of checked URLs to avoid duplicate API calls
+const checkedUrls = {};
+
+document.querySelectorAll("a[href]").forEach(link => {
+  link.addEventListener("mouseenter", function () {
+    const url = this.href;
+
+    if (!url || url.startsWith("javascript:") || url.startsWith("#")) return;
+    if (checkedUrls[url] === true) return;
+
+    // Send to background.js to check (avoids CORS)
+    chrome.runtime.sendMessage(
+      { type: "CHECK_LINK", url: url },
+      function (response) {
+        if (response && !response.safe) {
+          checkedUrls[url] = false;
+          showWarningModal({ type: "link", url, threat: response.threat });
+        } else if (response) {
+          checkedUrls[url] = true;
+        }
+      }
+    );
+  });
+});
+
+function showWarningModal({ type, url, threat, filename }) {
+  // Remove existing modal if any
+  const existing = document.getElementById("clicksafe-modal-overlay");
+  if (existing) existing.remove();
+
+  // Create modal container
+  const container = document.createElement("div");
+  container.innerHTML = `
+    <div id="clicksafe-modal-overlay" style="
+      position: fixed; top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      z-index: 999999;
+      display: flex; align-items: center; justify-content: center;
+      font-family: Arial, sans-serif;
+    ">
+      <div style="
+        background: white; border-radius: 12px;
+        padding: 32px; max-width: 420px; width: 90%;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;
+      ">
+        <div style="font-size: 48px; margin-bottom: 12px;">
+          ${type === "download" ? "🚨" : "⚠️"}
+        </div>
+        <h2 style="color: #dc2626; margin: 0 0 8px 0; font-size: 20px;">
+          ${type === "download" ? "Dangerous Download Blocked!" : "Dangerous Link Detected!"}
+        </h2>
+        <p style="color: #6b7280; margin: 0 0 8px 0; font-size: 14px;">
+          Threat: <strong>${threat}</strong>
+        </p>
+        <p style="color: #374151; margin: 0 0 24px 0; font-size: 13px; word-break: break-all;">
+          ${filename || url}
+        </p>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button id="clicksafe-go-back" style="
+            background: #16a34a; color: white; border: none;
+            padding: 10px 24px; border-radius: 8px;
+            font-size: 14px; cursor: pointer; font-weight: bold;
+          ">Go Back (Safe)</button>
+          <button id="clicksafe-proceed" style="
+            background: #f3f4f6; color: #6b7280;
+            border: 1px solid #d1d5db; padding: 10px 24px;
+            border-radius: 8px; font-size: 14px; cursor: pointer;
+          ">Proceed Anyway (Risky)</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  // Button actions
+  document.getElementById("clicksafe-go-back").addEventListener("click", () => {
+    container.remove();
+  });
+
+  document.getElementById("clicksafe-proceed").addEventListener("click", () => {
+    container.remove();
+  });
+}
+
+// Make showWarningModal available globally for background.js messages
+window.clicksafeShowModal = showWarningModal;
+
+// Listen for download warning from background.js
+chrome.runtime.onMessage.addListener(function (message) {
+  if (message.type === "SHOW_DOWNLOAD_WARNING") {
+    showWarningModal({
+      type: "download",
+      url: message.url,
+      filename: message.filename,
+      threat: message.threat
+    });
+  }
+});
 
 // ============================================================
 //  FEATURE 6: SIDEBAR INJECTION (stub — coming later)

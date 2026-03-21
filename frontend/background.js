@@ -1,59 +1,34 @@
 // ============================================================
 //  ClickSafe — background.js (Service Worker)
-//  Handles: Auto-HTTPS Redirect, Icon Updates
-//  Coming later: Cookie Tracker, Download Blocker
+//  Handles: Icon Updates, Message Listener, Download Blocker
 // ============================================================
 
+const BACKEND_URL = "http://localhost:3000";
 
 // ============================================================
-//  FEATURE 1: AUTO-HTTPS REDIRECT
-//  Intercepts any http:// request and redirects to https://
-// ============================================================
-
-// rules.json in frontend will handle this!
-
-// ============================================================
-//  FEATURE 1 (cont): ICON COLOR UPDATE
-//  Green icon = HTTPS (secure), Red icon = HTTP (not secure)
+//  FEATURE 1: ICON COLOR UPDATE
 // ============================================================
 
 chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-  // Only run when page has fully loaded and has a URL
   if (changeInfo.status === "complete" && tab.url) {
     if (tab.url.startsWith("https://")) {
-      // Secure page — show green icon
-      chrome.action.setIcon({
-        tabId: tabId,
-        path: {
-          16: "assets/logo/16.png"
-        }
-      });
-      console.log("[ClickSafe] Secure page (HTTPS) ✅");
+      chrome.action.setIcon({ tabId, path: { 16: "assets/logo/16.png" } });
     } else if (tab.url.startsWith("http://")) {
-      // Insecure page — show red icon
-      chrome.action.setIcon({
-        tabId: tabId,
-        path: {
-          16: "assets/logo/16-red.png"
-        }
-      });
-      console.log("[ClickSafe] Insecure page (HTTP) ⚠️");
+      chrome.action.setIcon({ tabId, path: { 16: "assets/logo/16-red.png" } });
     }
   }
 });
 
 
 // ============================================================
-//  FEATURE 2: HTTPS MONITOR (stub — coming next)
-//  Will scan pages for mixed content (HTTP resources on HTTPS pages)
+//  FEATURES 2 & 3: MESSAGE LISTENER (single listener for all)
 // ============================================================
 
-// Listen for messages from content.js
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
   // Feature 2: Mixed content detected
   if (message.type === "MIXED_CONTENT_DETECTED") {
-    console.log(`[ClickSafe] ⚠️ Mixed content on ${message.data.pageUrl}: ${message.data.resources.length} resource(s)`);
+    console.log(`[ClickSafe] Mixed content on ${message.data.pageUrl}: ${message.data.resources.length} resource(s)`);
     chrome.storage.local.get(["totalMixedContent"], function (result) {
       const total = result.totalMixedContent || 0;
       chrome.storage.local.set({ totalMixedContent: total + message.data.resources.length });
@@ -62,7 +37,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 
   // Feature 3: Trackers detected
   if (message.type === "TRACKERS_DETECTED") {
-    console.log(`[ClickSafe] 🍪 Trackers on ${message.data.pageUrl}: ${message.data.trackers.length}`);
+    console.log(`[ClickSafe] Trackers on ${message.data.pageUrl}: ${message.data.trackers.length}`);
     chrome.storage.local.get(["trackerLog", "totalTrackersFound"], function (result) {
       const log = result.trackerLog || [];
       const total = result.totalTrackersFound || 0;
@@ -74,56 +49,66 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       });
     });
   }
-
+  // Feature 4: Check link safety
+  if (message.type === "CHECK_LINK") {
+    fetch(`${BACKEND_URL}/api/check-link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: message.url })
+    })
+    .then(res => res.json())
+    .then(data => sendResponse(data))
+    .catch(() => sendResponse({ safe: true }));
+    return true; // Keep channel open for async response
+  }
 });
 
+
 // ============================================================
-//  FEATURE 3: COOKIE TRACKER DETECTOR (stub — coming next)
-//  Will analyze cookies and detect third-party trackers
+//  FEATURE 5: SUSPICIOUS DOWNLOAD BLOCKER
 // ============================================================
 
-// Listen for messages from content.js
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+chrome.downloads.onCreated.addListener(async function (downloadItem) {
+  const url = downloadItem.url;
+  const filename = downloadItem.filename || "";
 
-  // Feature 2: Mixed content detected
-  if (message.type === "MIXED_CONTENT_DETECTED") {
-    console.log(`[ClickSafe] ⚠️ Mixed content on ${message.data.pageUrl}: ${message.data.resources.length} resource(s)`);
-    chrome.storage.local.get(["totalMixedContent"], function (result) {
-      const total = result.totalMixedContent || 0;
-      chrome.storage.local.set({ totalMixedContent: total + message.data.resources.length });
+  console.log(`[ClickSafe] Download detected: ${filename || url}`);
+
+  chrome.downloads.pause(downloadItem.id);
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/check-download`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, filename })
     });
-  }
 
-  // Feature 3: Trackers detected
-  if (message.type === "TRACKERS_DETECTED") {
-    console.log(`[ClickSafe] 🍪 Trackers on ${message.data.pageUrl}: ${message.data.trackers.length}`);
-    chrome.storage.local.get(["trackerLog", "totalTrackersFound"], function (result) {
-      const log = result.trackerLog || [];
-      const total = result.totalTrackersFound || 0;
-      log.push(message.data);
-      chrome.storage.local.set({
-        trackerLog: log,
-        totalTrackersFound: total + message.data.trackers.length,
-        lastPageTrackers: message.data.trackers
+    const data = await response.json();
+
+    if (data.safe) {
+      console.log(`[ClickSafe] Download is safe, resuming: ${filename}`);
+      chrome.downloads.resume(downloadItem.id);
+    } else {
+      console.warn(`[ClickSafe] Dangerous download blocked! Threat: ${data.threat}`);
+      chrome.downloads.cancel(downloadItem.id);
+
+      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+        if (tabs[0]) {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            type: "SHOW_DOWNLOAD_WARNING",
+            url: url,
+            filename: filename,
+            threat: data.threat
+          });
+        }
       });
-    });
-  }
+    }
 
+  } catch (error) {
+    console.error("[ClickSafe] Download check failed, resuming:", error.message);
+    chrome.downloads.resume(downloadItem.id);
+  }
 });
 
 
-// ============================================================
-//  FEATURE 4: LINK HOVER PREVIEW (stub — needs backend first)
-// ============================================================
-
-// TODO: Receives messages from content.js, calls backend API
-
-
-// ============================================================
-//  FEATURE 5: SUSPICIOUS DOWNLOAD BLOCKER (stub — needs backend first)
-// ============================================================
-
-// TODO: chrome.downloads.onCreated listener goes here
-
-
-console.log("[ClickSafe] Background service worker started ✅");
+console.log("[ClickSafe] Background service worker started");

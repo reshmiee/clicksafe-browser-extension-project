@@ -21,7 +21,7 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
 
 
 // ============================================================
-//  FEATURES 2 & 3: MESSAGE LISTENER (single listener for all)
+//  FEATURES 2, 3, 4, 8: MESSAGE LISTENER
 // ============================================================
 
 chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
@@ -49,6 +49,7 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
       });
     });
   }
+
   // Feature 4: Check link safety
   if (message.type === "CHECK_LINK") {
     fetch(`${BACKEND_URL}/api/check-link`, {
@@ -59,8 +60,24 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     .then(res => res.json())
     .then(data => sendResponse(data))
     .catch(() => sendResponse({ safe: true }));
-    return true; // Keep channel open for async response
+    return true;
   }
+
+  // Feature 8: Dark patterns detected
+  if (message.type === "DARK_PATTERNS_DETECTED") {
+    console.warn(`[ClickSafe] Dark patterns on ${message.data.pageUrl}: ${message.data.count}`);
+    chrome.storage.local.get(["darkPatternLog", "totalDarkPatterns"], function (result) {
+      const log = result.darkPatternLog || [];
+      const total = result.totalDarkPatterns || 0;
+      log.push(message.data);
+      chrome.storage.local.set({
+        darkPatternLog: log,
+        totalDarkPatterns: total + message.data.count,
+        lastPageDarkPatterns: message.data.patterns
+      });
+    });
+  }
+
 });
 
 
@@ -73,7 +90,6 @@ chrome.downloads.onCreated.addListener(async function (downloadItem) {
   const filename = downloadItem.filename || "";
 
   console.log(`[ClickSafe] Download detected: ${filename || url}`);
-
   chrome.downloads.pause(downloadItem.id);
 
   try {
@@ -91,14 +107,11 @@ chrome.downloads.onCreated.addListener(async function (downloadItem) {
     } else {
       console.warn(`[ClickSafe] Dangerous download blocked! Threat: ${data.threat}`);
       chrome.downloads.cancel(downloadItem.id);
-
       chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         if (tabs[0]) {
           chrome.tabs.sendMessage(tabs[0].id, {
             type: "SHOW_DOWNLOAD_WARNING",
-            url: url,
-            filename: filename,
-            threat: data.threat
+            url, filename, threat: data.threat
           });
         }
       });

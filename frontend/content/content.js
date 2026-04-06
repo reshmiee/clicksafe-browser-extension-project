@@ -1,84 +1,57 @@
 // ============================================================
 //  ClickSafe — content.js
 //  Injected into every webpage the user visits
-//  Handles: HTTPS Monitor, Cookie Tracker Detection (via messaging)
-//  Coming later: Link Hover Preview, Sidebar injection
+//  Handles: HTTPS Monitor, Cookie Tracker Detection,
+//           Link Hover Preview, Dark Pattern Detector
 // ============================================================
 
 
 // ============================================================
 //  FEATURE 2: HTTPS MONITOR
-//  Scans the current page for HTTP resources loaded on HTTPS pages
-//  (mixed content detection)
 // ============================================================
 
 function scanForMixedContent() {
-  // Only run this check if the current page is HTTPS
   if (window.location.protocol !== "https:") return;
 
   const mixedResources = [];
 
-  // Check all images loading over HTTP
   document.querySelectorAll("img[src^='http://']").forEach(el => {
     mixedResources.push({ type: "image", url: el.src });
   });
-
-  // Check all scripts loading over HTTP
   document.querySelectorAll("script[src^='http://']").forEach(el => {
     mixedResources.push({ type: "script", url: el.src });
   });
-
-  // Check all iframes loading over HTTP
   document.querySelectorAll("iframe[src^='http://']").forEach(el => {
     mixedResources.push({ type: "iframe", url: el.src });
   });
-
-  // Check all stylesheets loading over HTTP
   document.querySelectorAll("link[rel='stylesheet'][href^='http://']").forEach(el => {
     mixedResources.push({ type: "stylesheet", url: el.href });
   });
 
   if (mixedResources.length > 0) {
-    console.log(`[ClickSafe] ⚠️ Mixed content found: ${mixedResources.length} HTTP resource(s) on HTTPS page`);
+    console.log(`[ClickSafe] Mixed content found: ${mixedResources.length} HTTP resource(s) on HTTPS page`);
     console.table(mixedResources);
-
-    // Send mixed content data to background.js for storage
     chrome.runtime.sendMessage({
       type: "MIXED_CONTENT_DETECTED",
-      data: {
-        pageUrl: window.location.href,
-        resources: mixedResources,
-        timestamp: new Date().toISOString()
-      }
+      data: { pageUrl: window.location.href, resources: mixedResources, timestamp: new Date().toISOString() }
     });
   } else {
-    console.log("[ClickSafe] ✅ No mixed content detected on this page");
+    console.log("[ClickSafe] No mixed content detected on this page");
   }
 }
 
-// Run the scan once the page is fully loaded
 scanForMixedContent();
 
 
 // ============================================================
 //  FEATURE 3: COOKIE TRACKER DETECTOR
-//  Scans page for known tracking scripts in <script> tags
 // ============================================================
 
 function scanForTrackingScripts() {
-  // Known tracker domains to look for
   const knownTrackers = [
-    "google-analytics.com",
-    "googletagmanager.com",
-    "facebook.net",
-    "facebook.com/tr",
-    "doubleclick.net",
-    "mixpanel.com",
-    "hotjar.com",
-    "segment.com",
-    "twitter.com/i/adsct",
-    "linkedin.com/px",
-    "connect.facebook.net"
+    "google-analytics.com", "googletagmanager.com", "facebook.net",
+    "facebook.com/tr", "doubleclick.net", "mixpanel.com", "hotjar.com",
+    "segment.com", "twitter.com/i/adsct", "linkedin.com/px", "connect.facebook.net"
   ];
 
   const foundTrackers = [];
@@ -93,43 +66,32 @@ function scanForTrackingScripts() {
   });
 
   if (foundTrackers.length > 0) {
-    console.log(`[ClickSafe] 🍪 Tracking scripts found: ${foundTrackers.length}`);
+    console.log(`[ClickSafe] Tracking scripts found: ${foundTrackers.length}`);
     console.table(foundTrackers);
-
-    // Send to background.js for storage
     chrome.runtime.sendMessage({
       type: "TRACKERS_DETECTED",
-      data: {
-        pageUrl: window.location.href,
-        trackers: foundTrackers,
-        timestamp: new Date().toISOString()
-      }
+      data: { pageUrl: window.location.href, trackers: foundTrackers, timestamp: new Date().toISOString() }
     });
   } else {
-    console.log("[ClickSafe] ✅ No tracking scripts detected on this page");
+    console.log("[ClickSafe] No tracking scripts detected on this page");
   }
 }
 
-// Run tracker scan on page load
 scanForTrackingScripts();
+
 
 // ============================================================
 //  FEATURE 4: LINK HOVER PREVIEW
-//  Checks every link on hover against backend API
 // ============================================================
 
-
-// Keep track of checked URLs to avoid duplicate API calls
 const checkedUrls = {};
 
 document.querySelectorAll("a[href]").forEach(link => {
   link.addEventListener("mouseenter", function () {
     const url = this.href;
-
     if (!url || url.startsWith("javascript:") || url.startsWith("#")) return;
     if (checkedUrls[url] === true) return;
 
-    // Send to background.js to check (avoids CORS)
     chrome.runtime.sendMessage(
       { type: "CHECK_LINK", url: url },
       function (response) {
@@ -145,11 +107,9 @@ document.querySelectorAll("a[href]").forEach(link => {
 });
 
 function showWarningModal({ type, url, threat, filename }) {
-  // Remove existing modal if any
   const existing = document.getElementById("clicksafe-modal-overlay");
   if (existing) existing.remove();
 
-  // Create modal container
   const container = document.createElement("div");
   container.innerHTML = `
     <div id="clicksafe-modal-overlay" style="
@@ -195,20 +155,12 @@ function showWarningModal({ type, url, threat, filename }) {
 
   document.body.appendChild(container);
 
-  // Button actions
-  document.getElementById("clicksafe-go-back").addEventListener("click", () => {
-    container.remove();
-  });
-
-  document.getElementById("clicksafe-proceed").addEventListener("click", () => {
-    container.remove();
-  });
+  document.getElementById("clicksafe-go-back").addEventListener("click", () => container.remove());
+  document.getElementById("clicksafe-proceed").addEventListener("click", () => container.remove());
 }
 
-// Make showWarningModal available globally for background.js messages
 window.clicksafeShowModal = showWarningModal;
 
-// Listen for download warning from background.js
 chrome.runtime.onMessage.addListener(function (message) {
   if (message.type === "SHOW_DOWNLOAD_WARNING") {
     showWarningModal({
@@ -220,11 +172,215 @@ chrome.runtime.onMessage.addListener(function (message) {
   }
 });
 
+
 // ============================================================
-//  FEATURE 6: SIDEBAR INJECTION (stub — coming later)
+//  FEATURE 8: DARK PATTERN DETECTOR
+//  Detects and highlights manipulative UI on webpages
 // ============================================================
 
-// TODO: Inject sidebar.html when extension icon is clicked
+const DARK_PATTERNS = {
+  fakeUrgency: {
+    label: "Fake Urgency",
+    color: "#f97316",
+    borderColor: "rgba(249,115,22,0.6)",
+    bgColor: "rgba(249,115,22,0.08)",
+    patterns: [
+      /only\s+\d+\s+left/i, /hurry[\s!]/i, /limited\s+time/i,
+      /offer\s+expires/i, /selling\s+fast/i, /almost\s+gone/i,
+      /\d+\s+people\s+(are\s+)?(viewing|watching)/i, /act\s+now/i,
+      /don'?t\s+miss\s+out/i, /last\s+chance/i, /ends\s+soon/i, /today\s+only/i,
+    ]
+  },
+  confirmShaming: {
+    label: "Confirm Shaming",
+    color: "#ec4899",
+    borderColor: "rgba(236,72,153,0.6)",
+    bgColor: "rgba(236,72,153,0.08)",
+    patterns: [
+      /no,?\s+i\s+don'?t\s+want/i, /no\s+thanks,?\s+i\s+(hate|prefer|don'?t)/i,
+      /i\s+don'?t\s+want\s+(to\s+)?(save|deals|offers|discount)/i,
+      /no\s+thanks,?\s+i'll\s+pay\s+full/i, /i\s+hate\s+saving/i,
+      /i\s+prefer\s+to\s+pay\s+more/i,
+    ]
+  },
+  fakeCountdown: {
+    label: "Fake Countdown Timer",
+    color: "#ef4444",
+    borderColor: "rgba(239,68,68,0.6)",
+    bgColor: "rgba(239,68,68,0.08)",
+    selectors: [
+      '[class*="countdown"]', '[class*="timer"]',
+      '[id*="countdown"]', '[id*="timer"]',
+      '[class*="count-down"]', '[class*="time-left"]',
+    ]
+  },
+  preTickedCheckbox: {
+    label: "Pre-ticked Checkbox",
+    color: "#8b5cf6",
+    borderColor: "rgba(139,92,246,0.6)",
+    bgColor: "rgba(139,92,246,0.08)",
+  },
+  cookieManipulation: {
+    label: "Cookie Banner Manipulation",
+    color: "#06b6d4",
+    borderColor: "rgba(6,182,212,0.6)",
+    bgColor: "rgba(6,182,212,0.08)",
+    acceptPatterns: [/accept\s+all/i, /allow\s+all/i, /agree\s+to\s+all/i, /i\s+accept/i],
+    rejectPatterns: [/reject\s+all/i, /decline/i, /refuse/i, /necessary\s+only/i, /manage/i],
+  }
+};
+
+function runDarkPatternDetector() {
+  const detected = [];
+
+  // 1. Fake Urgency + Confirm Shaming — scan text elements
+  const textElements = document.querySelectorAll('p, span, div, h1, h2, h3, h4, h5, strong, em, b, label, a, button');
+  textElements.forEach(el => {
+    if (el.children.length > 3) return;
+    const text = el.innerText?.trim();
+    if (!text || text.length > 300) return;
+
+    DARK_PATTERNS.fakeUrgency.patterns.forEach(pattern => {
+      if (pattern.test(text)) {
+        highlightElement(el, DARK_PATTERNS.fakeUrgency);
+        detected.push({ type: "Fake Urgency", text: text.substring(0, 80) });
+      }
+    });
+
+    DARK_PATTERNS.confirmShaming.patterns.forEach(pattern => {
+      if (pattern.test(text)) {
+        highlightElement(el, DARK_PATTERNS.confirmShaming);
+        detected.push({ type: "Confirm Shaming", text: text.substring(0, 80) });
+      }
+    });
+  });
+
+  // 2. Fake Countdown Timers
+  DARK_PATTERNS.fakeCountdown.selectors.forEach(selector => {
+    document.querySelectorAll(selector).forEach(el => {
+      if (/\d/.test(el.innerText)) {
+        highlightElement(el, DARK_PATTERNS.fakeCountdown);
+        detected.push({ type: "Fake Countdown Timer", text: el.innerText?.substring(0, 80) });
+      }
+    });
+  });
+
+  // 3. Pre-ticked Checkboxes
+  document.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+    const label = findCheckboxLabel(checkbox);
+    const labelText = label?.innerText?.toLowerCase() || "";
+    const marketingKeywords = [
+      "newsletter", "marketing", "promotional", "offers", "updates",
+      "emails", "subscribe", "news", "deals", "partner", "third party", "third-party"
+    ];
+    if (marketingKeywords.some(kw => labelText.includes(kw))) {
+      const target = label || checkbox;
+      highlightElement(target, DARK_PATTERNS.preTickedCheckbox);
+      detected.push({ type: "Pre-ticked Checkbox", text: labelText.substring(0, 80) });
+    }
+  });
+
+  // 4. Cookie Banner Manipulation
+  const allButtons = Array.from(document.querySelectorAll('button, a[role="button"], [class*="cookie"] button, [id*="cookie"] button'));
+  let hasAccept = false;
+  let hasReject = false;
+  let acceptBtn = null;
+
+  allButtons.forEach(btn => {
+    const text = btn.innerText?.trim();
+    if (!text) return;
+    if (DARK_PATTERNS.cookieManipulation.acceptPatterns.some(p => p.test(text))) {
+      hasAccept = true;
+      acceptBtn = btn;
+    }
+    if (DARK_PATTERNS.cookieManipulation.rejectPatterns.some(p => p.test(text))) {
+      hasReject = true;
+    }
+  });
+
+  if (hasAccept && !hasReject && acceptBtn) {
+    highlightElement(acceptBtn, DARK_PATTERNS.cookieManipulation);
+    detected.push({ type: "Cookie Banner Manipulation", text: "Accept button found but no Reject option" });
+  }
+
+  // Report
+  if (detected.length > 0) {
+    console.warn(`[ClickSafe] 🚨 ${detected.length} dark pattern(s) detected!`);
+    console.table(detected);
+    showDarkPatternBadge(detected.length);
+    chrome.runtime.sendMessage({
+      type: "DARK_PATTERNS_DETECTED",
+      data: { pageUrl: window.location.href, patterns: detected, count: detected.length, timestamp: new Date().toISOString() }
+    });
+  } else {
+    console.log("[ClickSafe] No dark patterns detected on this page");
+  }
+}
+
+function highlightElement(el, pattern) {
+  if (el.dataset.clicksafeHighlighted) return;
+  el.dataset.clicksafeHighlighted = "true";
+  el.style.outline = `2px solid ${pattern.borderColor}`;
+  el.style.background = pattern.bgColor;
+  el.style.position = "relative";
+
+  const tooltip = document.createElement("div");
+  tooltip.innerText = `⚠️ ${pattern.label}`;
+  tooltip.style.cssText = `
+    position: absolute; top: -26px; left: 0;
+    background: ${pattern.color}; color: white;
+    font-size: 11px; font-weight: bold;
+    padding: 3px 8px; border-radius: 4px;
+    z-index: 999998; white-space: nowrap;
+    pointer-events: none; font-family: Arial, sans-serif;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  `;
+  el.appendChild(tooltip);
+}
+
+function findCheckboxLabel(checkbox) {
+  if (checkbox.id) {
+    const label = document.querySelector(`label[for="${checkbox.id}"]`);
+    if (label) return label;
+  }
+  const parent = checkbox.closest('label');
+  if (parent) return parent;
+  const sibling = checkbox.nextElementSibling;
+  if (sibling && sibling.tagName === "LABEL") return sibling;
+  return null;
+}
+
+function showDarkPatternBadge(count) {
+  const existing = document.getElementById("clicksafe-dp-badge");
+  if (existing) existing.remove();
+
+  const badge = document.createElement("div");
+  badge.id = "clicksafe-dp-badge";
+  badge.innerHTML = `
+    <div style="
+      position: fixed; bottom: 24px; right: 24px;
+      background: #1a1a2e; border: 1px solid rgba(249,115,22,0.4);
+      color: white; padding: 12px 18px; border-radius: 12px;
+      font-family: Arial, sans-serif; font-size: 13px; font-weight: bold;
+      z-index: 999999; box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      display: flex; align-items: center; gap: 10px; cursor: pointer;
+    ">
+      <span style="font-size:20px;">🚨</span>
+      <div>
+        <div style="color:#f97316;">${count} Dark Pattern${count > 1 ? 's' : ''} Detected</div>
+        <div style="font-weight:normal;font-size:11px;color:#9ca3af;margin-top:2px;">Highlighted on page · Click to dismiss</div>
+      </div>
+    </div>
+  `;
+
+  badge.addEventListener("click", () => badge.remove());
+  document.body.appendChild(badge);
+  setTimeout(() => badge?.remove(), 8000);
+}
+
+// Run on load + after delay for dynamic content
+runDarkPatternDetector();
+setTimeout(runDarkPatternDetector, 2500);
 
 
-console.log("[ClickSafe] content.js loaded ✅");
+console.log("[ClickSafe] content.js loaded");

@@ -320,22 +320,41 @@ function runDarkPatternDetector() {
 function highlightElement(el, pattern) {
   if (el.dataset.clicksafeHighlighted) return;
   el.dataset.clicksafeHighlighted = "true";
-  el.style.outline = `2px solid ${pattern.borderColor}`;
-  el.style.background = pattern.bgColor;
-  el.style.position = "relative";
 
+  // Create a wrapper div around the element
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = `
+    display: inline-block !important;
+    border: 3px solid ${pattern.color} !important;
+    border-radius: 6px !important;
+    padding: 2px !important;
+    background: ${pattern.bgColor} !important;
+    position: relative !important;
+  `;
+
+  // Insert wrapper before element then move element inside
+  el.parentNode.insertBefore(wrapper, el);
+  wrapper.appendChild(el);
+
+  // Add tooltip
   const tooltip = document.createElement("div");
   tooltip.innerText = `⚠️ ${pattern.label}`;
   tooltip.style.cssText = `
-    position: absolute; top: -26px; left: 0;
-    background: ${pattern.color}; color: white;
-    font-size: 11px; font-weight: bold;
-    padding: 3px 8px; border-radius: 4px;
-    z-index: 999998; white-space: nowrap;
-    pointer-events: none; font-family: Arial, sans-serif;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    position: absolute !important;
+    top: -24px !important;
+    left: 0 !important;
+    background: ${pattern.color} !important;
+    color: white !important;
+    font-size: 11px !important;
+    font-weight: bold !important;
+    padding: 2px 8px !important;
+    border-radius: 4px !important;
+    z-index: 2147483647 !important;
+    white-space: nowrap !important;
+    pointer-events: none !important;
+    font-family: Arial, sans-serif !important;
   `;
-  el.appendChild(tooltip);
+  wrapper.appendChild(tooltip);
 }
 
 function findCheckboxLabel(checkbox) {

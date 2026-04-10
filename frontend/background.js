@@ -188,7 +188,19 @@ async function updateThreatBadge(tabId) {
     const trackerThreats = data[`trackerData_${tabId}`]?.count           || 0;
     const mixedThreats   = data[`mixedContent_${tabId}`]?.count          || 0;
     const tabUrl         = data[`tabUrl_${tabId}`]                       || '';
-    const isHttps        = tabUrl.startsWith('https://');
+    
+    // Check URL prefix first
+    const urlSaysHttps = tabUrl.startsWith("https://");
+
+    // Now verify the certificate is actually valid by checking tab title.
+    // When Chrome hits a cert error (expired, invalid, self-signed),
+    // it sets the tab title to "Privacy error" — even if the URL starts with https://
+    let tab = null;
+    try { tab = await chrome.tabs.get(tabId); } catch (e) {}
+    const hasCertError = tab?.title?.toLowerCase().includes("privacy error") ||
+                        tab?.title?.toLowerCase().includes("your connection isn't private");
+
+const isHttps = urlSaysHttps && !hasCertError;
 
     const total = cookieThreats + trackerThreats + mixedThreats;
 
@@ -460,9 +472,13 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   chrome.storage.local.set({ [`tabUrl_${tabId}`]: tab.url });
 
   // Icon colour
-  const icon = tab.url.startsWith("https://")
+  // Same cert error check — tab object is already available here
+  const hasCertError = tab?.title?.toLowerCase().includes("privacy error") ||
+                      tab?.title?.toLowerCase().includes("your connection isn't private");
+
+  const icon = (tab.url.startsWith("https://") && !hasCertError)
     ? "assets/logo/16.png"
-    : tab.url.startsWith("http://")
+    : tab.url.startsWith("http://") || hasCertError
       ? "assets/logo/16-red.png"
       : null;
   if (icon) chrome.action.setIcon({ tabId, path: { 16: icon } });

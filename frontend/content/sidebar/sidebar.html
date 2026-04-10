@@ -124,6 +124,128 @@
       font-size: 11px;
       color: #9ca3af;
     }
+    
+    .cookie-item {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+    
+    .cookie-domain {
+      font-weight: bold;
+      color: #dc2626;
+      display: block;
+      margin-bottom: 4px;
+    }
+    
+    .cookie-name {
+      color: #6b7280;
+      font-size: 11px;
+      display: block;
+    }
+    
+    .cookie-reasons {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid #f3f4f6;
+    }
+    
+    .reason-tag {
+      display: inline-block;
+      background: #fef3c7;
+      color: #92400e;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      margin-right: 4px;
+      margin-top: 4px;
+    }
+
+    /* ── Privacy Score Gauge ─────────────────────────── */
+    .score-section {
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .gauge-wrap {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      flex-shrink: 0;
+    }
+
+    .gauge-wrap svg {
+      width: 80px;
+      height: 80px;
+      transform: rotate(-90deg);
+    }
+
+    .gauge-bg {
+      fill: none;
+      stroke: #e5e7eb;
+      stroke-width: 8;
+    }
+
+    .gauge-arc {
+      fill: none;
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease;
+    }
+
+    .gauge-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+
+    .gauge-number {
+      font-size: 20px;
+      font-weight: bold;
+      line-height: 1;
+    }
+
+    .gauge-label {
+      font-size: 9px;
+      color: #6b7280;
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .score-info {
+      flex: 1;
+    }
+
+    .score-info h2 {
+      font-size: 13px;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .score-verdict {
+      font-size: 14px;
+      font-weight: bold;
+      margin-bottom: 4px;
+    }
+
+    .score-desc {
+      font-size: 11px;
+      color: #6b7280;
+      line-height: 1.4;
+    }
   </style>
 </head>
 <body>
@@ -137,6 +259,30 @@
     <button class="close-btn" id="close-btn">✕</button>
   </div>
 
+  <!-- Privacy Score Gauge -->
+  <div class="score-section">
+    <div class="gauge-wrap">
+      <!-- r=34 → circumference = 2π×34 ≈ 213.6 -->
+      <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+        <circle class="gauge-bg" cx="40" cy="40" r="34"/>
+        <circle class="gauge-arc" id="gauge-arc"
+          cx="40" cy="40" r="34"
+          stroke-dasharray="213.6"
+          stroke-dashoffset="213.6"
+          stroke="#16a34a"/>
+      </svg>
+      <div class="gauge-text">
+        <span class="gauge-number" id="gauge-number">—</span>
+        <span class="gauge-label">/100</span>
+      </div>
+    </div>
+    <div class="score-info">
+      <h2>Privacy Score</h2>
+      <div class="score-verdict" id="score-verdict">Scanning…</div>
+      <div class="score-desc" id="score-desc">Analyzing page security…</div>
+    </div>
+  </div>
+
   <!-- Current Page -->
   <div class="section">
     <h2>Current Page</h2>
@@ -147,6 +293,14 @@
   <!-- This Page Stats -->
   <div class="section">
     <h2>This Page</h2>
+    <div class="stat-row">
+      <span>🍪 Cookie Trackers</span>
+      <span class="stat-value danger" id="stat-cookie-trackers">0</span>
+    </div>
+    <div class="stat-row">
+      <span>📊 Total Cookies</span>
+      <span class="stat-value" id="stat-total-cookies">0</span>
+    </div>
     <div class="stat-row">
       <span>Trackers Found</span>
       <span class="stat-value danger" id="stat-trackers">0</span>
@@ -160,10 +314,21 @@
       <span class="stat-value" id="stat-links">0</span>
     </div>
   </div>
+  
+  <!-- Cookie Trackers Detail -->
+  <div class="section" id="cookie-details-section" style="display: none;">
+    <h2>Tracking Cookies Detected</h2>
+    <div id="cookie-list" style="max-height: 200px; overflow-y: auto;">
+    </div>
+  </div>
 
   <!-- Session Stats -->
   <div class="section">
-    <h2>Session Total</h2>
+    <h2 style="letter-spacing: normal;">Session Total</h2>
+    <div class="stat-row">
+      <span>🍪 Cookie Trackers Blocked</span>
+      <span class="stat-value danger" id="stat-total-cookie-trackers">0</span>
+    </div>
     <div class="stat-row">
       <span>Total Trackers</span>
       <span class="stat-value danger" id="stat-total-trackers">0</span>
@@ -172,6 +337,8 @@
       <span>Total Mixed Content</span>
       <span class="stat-value danger" id="stat-total-mixed">0</span>
     </div>
+
+  
   </div>
 
   <!-- Actions -->

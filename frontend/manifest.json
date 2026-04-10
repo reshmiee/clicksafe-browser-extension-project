@@ -37,6 +37,7 @@
     "storage",
     "cookies",
     "downloads",
+    "webRequest",
     "activeTab",
     "scripting",
     "declarativeNetRequest",

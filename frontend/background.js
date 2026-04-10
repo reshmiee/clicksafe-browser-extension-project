@@ -1,103 +1,294 @@
 // ============================================================
 //  ClickSafe — background.js (Service Worker)
-//  Handles: Icon Updates, Message Listener, Download Blocker,
-//           Settings, Tracker Blocklist, Safe Browsing Hashes
+//
+//  NOTE: importScripts() is NOT used here. All utility code
+//  is inlined because importScripts causes crashes on service
+//  worker restarts when modules define top-level `const`.
+//
+//  Responsibilities:
+//  1. Icon colour update (HTTPS vs HTTP)
+//  2. Message listener
+//  3. Download blocker
+//  4. Tracker blocklist (Disconnect.me)
+//  5. Local Safe Browsing hash prefix store
+//  6. Cookie scanning (inlined from cookieTracker.js)
+//  7. Mixed content detection (DOM-scan results from content.js)
+//  8. Live threat badge + privacy banner
 // ============================================================
 
-const BACKEND_URL = "http://localhost:3000"; // Replace with your deployed backend URL
+const BACKEND_URL = "http://localhost:3000"; // ← replace with deployed URL
+const SB_REFRESH_MS = 30 * 60 * 1000;
 
-// How often to refresh the local Safe Browsing hash list (30 min)
-const SB_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
 
 // ============================================================
-//  SETTINGS CACHE
+//  SETTINGS
 // ============================================================
 
 const DEFAULT_SETTINGS = {
-  httpsEnabled: true,
-  cookiesEnabled: true,
-  linksEnabled: true,
+  httpsEnabled:    true,
+  cookiesEnabled:  true,
+  linksEnabled:    true,
   downloadsEnabled: true,
-  modalsEnabled: true,
-  whitelist: []
+  modalsEnabled:   true,
+  whitelist:       []
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
 
-chrome.storage.local.get(["settings"], function (result) {
+chrome.storage.local.get(["settings"], result => {
   if (result.settings) currentSettings = { ...DEFAULT_SETTINGS, ...result.settings };
 });
 
 
 // ============================================================
-//  TRACKER BLOCKLIST — loaded from bundled data/trackers.json
-//  and refreshed from Disconnect.me on install/update
+//  COOKIE TRACKER — inlined from cookieTracker.js
+//  (importScripts is removed — see header note)
+// ============================================================
+
+const KNOWN_TRACKER_DOMAINS = [
+  'doubleclick.net', 'google-analytics.com', 'googleadservices.com',
+  'googlesyndication.com', 'googletagmanager.com', 'facebook.com',
+  'facebook.net', 'fbcdn.net', 'adnxs.com', 'adsrvr.org',
+  'amazon-adsystem.com', 'criteo.com', 'rubiconproject.com',
+  'pubmatic.com', 'openx.net', 'mixpanel.com', 'segment.com',
+  'quantserve.com', 'scorecardresearch.com', 'chartbeat.com',
+  'hotjar.com', 'twitter.com', 'linkedin.com', 'pinterest.com',
+  'snapchat.com', 'tiktok.com', 'addthis.com', 'sharethis.com',
+  'outbrain.com', 'taboola.com'
+];
+
+function _cleanDomain(domain) {
+  return domain.replace(/^\./, '');
+}
+
+function _isKnownCookieTracker(cookieDomain) {
+  const cleaned = _cleanDomain(cookieDomain);
+  return KNOWN_TRACKER_DOMAINS.some(t => cleaned.includes(t));
+}
+
+function _isThirdPartyCookie(cookieDomain, currentDomain) {
+  const cookieBase   = _cleanDomain(cookieDomain).split('.').slice(-2).join('.');
+  const currentBase  = _cleanDomain(currentDomain).split('.').slice(-2).join('.');
+  return cookieBase !== currentBase;
+}
+
+function _hasLongExpiration(expirationDate) {
+  if (!expirationDate) return false;
+  return (expirationDate - Date.now() / 1000) > 90 * 24 * 60 * 60;
+}
+
+function _analyzeCookie(cookie, currentDomain) {
+  const isKnown      = _isKnownCookieTracker(cookie.domain);
+  const isThirdParty = _isThirdPartyCookie(cookie.domain, currentDomain);
+  const hasLongLife  = _hasLongExpiration(cookie.expirationDate);
+  const reasons      = [];
+
+  if (isKnown)      reasons.push('Known tracking domain');
+  if (isThirdParty) reasons.push('Third-party cookie');
+  if (hasLongLife)  reasons.push('Long expiration (>90 days)');
+
+  const isTracker = isKnown || (isThirdParty && hasLongLife);
+
+  return {
+    isTracker,
+    reasons,
+    cookie: { name: cookie.name, domain: cookie.domain, expirationDate: cookie.expirationDate }
+  };
+}
+
+async function scanAllCookiesForUrl(currentUrl, tabId) {
+  try {
+    if (!currentUrl ||
+        currentUrl.startsWith('chrome://') ||
+        currentUrl.startsWith('chrome-extension://')) {
+      return { error: 'Unsupported URL' };
+    }
+
+    const urlObj       = new URL(currentUrl);
+    const currentDomain = urlObj.hostname;
+
+    // Get all cookies then filter client-side.
+    // We limit scope: only first-party cookies + cookies from known tracker domains.
+    // This avoids iterating thousands of unrelated cookies while still catching trackers.
+    const allCookies = await chrome.cookies.getAll({});
+
+    const currentBase = currentDomain.split('.').slice(-2).join('.');
+
+    const pageCookies = allCookies.filter(c => {
+      const base = _cleanDomain(c.domain).split('.').slice(-2).join('.');
+      return base === currentBase || _isKnownCookieTracker(c.domain);
+    });
+
+    const firstPartyCookies  = pageCookies.filter(c => {
+      const base = _cleanDomain(c.domain).split('.').slice(-2).join('.');
+      return base === currentBase;
+    });
+
+    const trackingCookies = [];
+    for (const cookie of pageCookies) {
+      const analysis = _analyzeCookie(cookie, currentDomain);
+      if (analysis.isTracker) trackingCookies.push(analysis);
+    }
+
+    return {
+      pageUrl:         currentUrl,
+      pageDomain:      currentDomain,
+      timestamp:       new Date().toISOString(),
+      totalCookies:    firstPartyCookies.length,
+      trackingCookies: trackingCookies.length,
+      trackers:        trackingCookies
+    };
+
+  } catch (error) {
+    console.error('[ClickSafe Cookie] Error:', error);
+    return { error: error.message };
+  }
+}
+
+
+// ============================================================
+//  PRIVACY SCORE — single source of truth
+//  Both background.js (badge) and sidebar.js read from storage.
+//  sidebar.js calls computePrivacyScore() independently but
+//  uses the same formula — kept in sync here via comment.
+//
+//  Formula:
+//    start 100
+//    -30 if HTTP
+//    -min(trackingCookies * 5, 30)
+//    -min(trackers * 4, 20)
+//    -min(mixedContent * 5, 20)
+//    clamp 0–100
+// ============================================================
+
+function computePrivacyScore({ isHttps, trackingCookies, trackers, mixedContent }) {
+  let score = 100;
+  if (!isHttps)      score -= 30;
+  score -= Math.min((trackingCookies || 0) * 5, 30);
+  score -= Math.min((trackers        || 0) * 4, 20);
+  score -= Math.min((mixedContent    || 0) * 5, 20);
+  return Math.max(0, Math.min(100, score));
+}
+
+
+// ============================================================
+//  LIVE THREAT BADGE
+// ============================================================
+
+async function updateThreatBadge(tabId) {
+  try {
+    const data = await chrome.storage.local.get([
+      `cookieData_${tabId}`,
+      `trackerData_${tabId}`,
+      `mixedContent_${tabId}`,
+      `tabUrl_${tabId}`
+    ]);
+
+    const cookieThreats  = data[`cookieData_${tabId}`]?.trackingCookies || 0;
+    const trackerThreats = data[`trackerData_${tabId}`]?.count           || 0;
+    const mixedThreats   = data[`mixedContent_${tabId}`]?.count          || 0;
+    const tabUrl         = data[`tabUrl_${tabId}`]                       || '';
+    const isHttps        = tabUrl.startsWith('https://');
+
+    const total = cookieThreats + trackerThreats + mixedThreats;
+
+    if (total > 0) {
+      chrome.action.setBadgeText({ text: String(total), tabId });
+      chrome.action.setBadgeBackgroundColor({ color: '#DC2626', tabId });
+    } else {
+      chrome.action.setBadgeText({ text: '', tabId });
+    }
+
+    const score = computePrivacyScore({
+      isHttps,
+      trackingCookies: cookieThreats,
+      trackers:        trackerThreats,
+      mixedContent:    mixedThreats
+    });
+
+    // Store score so sidebar can read it without recomputing
+    chrome.storage.local.set({ [`privacyScore_${tabId}`]: score });
+
+    if (score < 50 && total > 0) {
+      let topReason = '';
+      if (!isHttps)            topReason = 'This page is not encrypted (HTTP)';
+      else if (cookieThreats)  topReason = `${cookieThreats} tracking cookie${cookieThreats > 1 ? 's' : ''} detected`;
+      else if (trackerThreats) topReason = `${trackerThreats} tracker script${trackerThreats > 1 ? 's' : ''} detected`;
+      else if (mixedThreats)   topReason = `${mixedThreats} mixed-content resource${mixedThreats > 1 ? 's' : ''} loaded`;
+
+      chrome.tabs.sendMessage(tabId, {
+        type: 'SHOW_PRIVACY_BANNER', score, topReason, total
+      }).catch(() => {});
+    } else {
+      chrome.tabs.sendMessage(tabId, { type: 'HIDE_PRIVACY_BANNER' }).catch(() => {});
+    }
+
+  } catch (e) {
+    console.error('[ClickSafe Badge]', e);
+  }
+}
+
+
+// ============================================================
+//  TRACKER BLOCKLIST
 // ============================================================
 
 let trackerSet = new Set();
 
 async function loadTrackerBlocklist() {
   try {
-    // First load the bundled list so we always have something
-    const bundledUrl = chrome.runtime.getURL("data/trackers.json");
-    const bundledRes = await fetch(bundledUrl);
+    const bundledRes  = await fetch(chrome.runtime.getURL("data/trackers.json"));
     const bundledList = await bundledRes.json();
     bundledList.forEach(d => trackerSet.add(d));
-    console.log(`[ClickSafe] Loaded ${trackerSet.size} trackers from bundled list`);
+    console.log(`[ClickSafe] Bundled tracker list: ${trackerSet.size} domains`);
+  } catch (err) {
+    console.warn("[ClickSafe] Bundled tracker list failed:", err.message);
+  }
 
-    // Then try to fetch the live Disconnect.me list and cache it
-    const cached = await chrome.storage.local.get(["trackerBlocklist", "trackerBlocklistUpdated"]);
-    const lastUpdated = cached.trackerBlocklistUpdated || 0;
-    const oneDayMs = 24 * 60 * 60 * 1000;
+  try {
+    const stored  = await chrome.storage.local.get(["trackerBlocklist", "trackerBlocklistUpdated"]);
+    const age     = Date.now() - (stored.trackerBlocklistUpdated || 0);
+    const ONE_DAY = 24 * 60 * 60 * 1000;
 
-    if (Date.now() - lastUpdated < oneDayMs && cached.trackerBlocklist) {
-      // Use cached live list
-      cached.trackerBlocklist.forEach(d => trackerSet.add(d));
-      console.log(`[ClickSafe] Loaded ${trackerSet.size} trackers total (bundled + cached live)`);
+    if (age < ONE_DAY && stored.trackerBlocklist?.length) {
+      stored.trackerBlocklist.forEach(d => trackerSet.add(d));
+      console.log(`[ClickSafe] Cached live tracker list: ${trackerSet.size} total`);
       return;
     }
 
-    // Fetch live list from Disconnect.me GitHub
-    const liveRes = await fetch(
+    const liveRes  = await fetch(
       "https://raw.githubusercontent.com/disconnectme/disconnect-tracking-protection/master/services.json"
     );
-    if (!liveRes.ok) throw new Error("Failed to fetch live blocklist");
+    if (!liveRes.ok) throw new Error(`HTTP ${liveRes.status}`);
 
-    const liveData = await liveRes.json();
+    const liveData    = await liveRes.json();
     const liveDomains = [];
 
-    // Parse Disconnect.me services.json format: { categories: { Advertising: { ServiceName: { domains: [...] } } } }
     for (const category of Object.values(liveData.categories || {})) {
       for (const service of Object.values(category)) {
-        for (const domainList of Object.values(service)) {
-          if (Array.isArray(domainList)) {
-            domainList.forEach(d => { trackerSet.add(d); liveDomains.push(d); });
+        for (const [key, val] of Object.entries(service)) {
+          if (key === "homepage") continue;
+          if (Array.isArray(val)) {
+            val.forEach(d => { trackerSet.add(d); liveDomains.push(d); });
           }
         }
       }
     }
 
     await chrome.storage.local.set({
-      trackerBlocklist: liveDomains,
+      trackerBlocklist:        liveDomains,
       trackerBlocklistUpdated: Date.now()
     });
 
-    console.log(`[ClickSafe] Loaded ${trackerSet.size} trackers total (bundled + live Disconnect.me)`);
-
+    console.log(`[ClickSafe] Live Disconnect.me list: ${trackerSet.size} total`);
   } catch (err) {
-    console.warn("[ClickSafe] Could not load live tracker list, using bundled:", err.message);
+    console.warn("[ClickSafe] Live tracker fetch failed:", err.message);
   }
 }
 
-// Load blocklist on startup
-loadTrackerBlocklist();
-
-// Expose tracker set to content scripts via message
-// (content scripts can't import modules, so they ask background)
 function isTracker(hostname) {
+  if (!hostname) return false;
   if (trackerSet.has(hostname)) return true;
-  // Also check if any known tracker domain is a suffix of the hostname
-  // e.g. "api.segment.io" matches "segment.io"
   const parts = hostname.split(".");
   for (let i = 1; i < parts.length - 1; i++) {
     if (trackerSet.has(parts.slice(i).join("."))) return true;
@@ -107,110 +298,193 @@ function isTracker(hostname) {
 
 
 // ============================================================
-//  LOCAL SAFE BROWSING HASH LOOKUP
-//  Uses the Google Safe Browsing Update API v4 to maintain
-//  a local prefix set — URLs never leave the browser unless
-//  there is a local hash match (same as how Chrome works).
+//  LOCAL SAFE BROWSING HASH PREFIX STORE
 // ============================================================
 
-// In-memory prefix store: Map<threatType, Set<4-byte hex prefix>>
 let sbPrefixStore = new Map();
-let sbClientState = {};  // threatType -> clientState token for incremental updates
 
-const SB_THREAT_TYPES = [
-  "MALWARE",
-  "SOCIAL_ENGINEERING",
-  "UNWANTED_SOFTWARE",
-  "POTENTIALLY_HARMFUL_APPLICATION"
-];
+function canonicaliseUrl(url) {
+  try {
+    const u = new URL(url);
+    return (u.protocol + "//" + u.host + u.pathname + (u.search || "")).toLowerCase();
+  } catch { return url.toLowerCase(); }
+}
 
-// Hash a URL for Safe Browsing lookup (SHA-256, return hex)
+function getUrlExpressions(url) {
+  try {
+    const u    = new URL(url);
+    const host = u.hostname;
+    const path = u.pathname + (u.search || "");
+    const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(host);
+    const exprs = new Set();
+
+    if (!isIp) {
+      const parts = host.split(".");
+      for (let i = Math.max(0, parts.length - 5); i < parts.length - 1; i++) {
+        const h = parts.slice(i).join(".");
+        exprs.add(h + path);
+        exprs.add(h + "/");
+      }
+    }
+    exprs.add(host + path);
+    exprs.add(host + "/");
+    return [...exprs];
+  } catch { return [url]; }
+}
+
 async function sha256Hex(str) {
   const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Canonicalise a URL per Safe Browsing spec (simplified)
-function canonicaliseUrl(url) {
-  try {
-    const u = new URL(url);
-    // Remove fragment, normalise path
-    return (u.protocol + "//" + u.host + u.pathname + u.search).toLowerCase();
-  } catch {
-    return url.toLowerCase();
-  }
-}
-
-// Generate the URL expressions to check (hostname + path variations)
-function getUrlExpressions(url) {
-  try {
-    const u = new URL(url);
-    const host = u.hostname;
-    const path = u.pathname + (u.search || "");
-    const expressions = [];
-
-    // Host variations: up to 5 components, skip IP
-    const hostParts = host.split(".");
-    const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(host);
-    if (!isIp) {
-      for (let i = Math.max(0, hostParts.length - 5); i < hostParts.length - 1; i++) {
-        expressions.push(hostParts.slice(i).join(".") + path);
-        expressions.push(hostParts.slice(i).join(".") + "/");
-      }
-    }
-
-    expressions.push(host + path);
-    expressions.push(host + "/");
-    return [...new Set(expressions)];
-  } catch {
-    return [url];
-  }
-}
-
-async function updateSbPrefixes() {
-  const API_KEY = "YOUR_GOOGLE_SAFE_BROWSING_API_KEY"; // Set via backend proxy ideally
-  // NOTE: In production, call your backend /api/sb-update which proxies this
-  // so the API key stays server-side. For now this is a placeholder structure.
-  console.log("[ClickSafe] Safe Browsing prefix update skipped — configure API key in backend");
-}
-
-// Check a URL against the local prefix store
-// Returns { safe: boolean, threat?: string }
 async function checkUrlLocally(url) {
-  if (sbPrefixStore.size === 0) {
-    // No local data yet — fall back to backend check
-    return null;
-  }
+  if (sbPrefixStore.size === 0) return null;
 
-  const canonical = canonicaliseUrl(url);
-  const expressions = getUrlExpressions(canonical);
+  const canonical    = canonicaliseUrl(url);
+  const expressions  = getUrlExpressions(canonical);
 
   for (const expr of expressions) {
-    const hash = await sha256Hex(expr);
-    const prefix = hash.substring(0, 8); // 4-byte (8 hex char) prefix
+    const hash   = await sha256Hex(expr);
+    const prefix = hash.substring(0, 8);
 
     for (const [threatType, prefixes] of sbPrefixStore) {
       if (prefixes.has(prefix)) {
-        // Local prefix match — must confirm with full hash via backend
-        return { needsConfirmation: true, prefix, hash, threatType, url };
+        return { needsConfirmation: true, hash, threatType, url };
       }
     }
   }
-
   return { safe: true };
+}
+
+function applyRemovals(existingSet, removalIndices) {
+  if (!removalIndices?.length) return existingSet;
+  const sorted = [...existingSet].sort();
+  removalIndices.slice().sort((a, b) => b - a)
+    .forEach(i => { if (i < sorted.length) sorted.splice(i, 1); });
+  return new Set(sorted);
+}
+
+async function updateSbPrefixes() {
+  try {
+    const stored       = await chrome.storage.local.get(["sbClientStates"]);
+    const clientStates = stored.sbClientStates || {};
+
+    const response = await fetch(`${BACKEND_URL}/api/sb-prefixes`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ clientStates })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const data = await response.json();
+
+    for (const [threatType, update] of Object.entries(data.prefixes || {})) {
+      const { entries, responseType, removals } = update;
+      if (responseType === "FULL_UPDATE" || !sbPrefixStore.has(threatType)) {
+        sbPrefixStore.set(threatType, new Set(entries));
+      } else {
+        let existing = sbPrefixStore.get(threatType) || new Set();
+        existing = applyRemovals(existing, removals);
+        entries.forEach(p => existing.add(p));
+        sbPrefixStore.set(threatType, existing);
+      }
+    }
+
+    const storeable = {};
+    for (const [threatType, prefixes] of sbPrefixStore) {
+      storeable[threatType] = [...prefixes];
+    }
+    await chrome.storage.local.set({
+      sbPrefixStore:     storeable,
+      sbClientStates:    data.clientStates || {},
+      sbPrefixesUpdated: Date.now()
+    });
+
+    const total = [...sbPrefixStore.values()].reduce((a, s) => a + s.size, 0);
+    console.log(`[ClickSafe] SB prefixes: ${total} across ${sbPrefixStore.size} threat types`);
+
+  } catch (err) {
+    console.warn("[ClickSafe] SB prefix update failed:", err.message);
+  }
+}
+
+async function loadSbPrefixesFromStorage() {
+  try {
+    const stored = await chrome.storage.local.get(["sbPrefixStore", "sbPrefixesUpdated"]);
+
+    if (stored.sbPrefixStore && Object.keys(stored.sbPrefixStore).length > 0) {
+      for (const [threatType, prefixes] of Object.entries(stored.sbPrefixStore)) {
+        sbPrefixStore.set(threatType, new Set(prefixes));
+      }
+      const total = [...sbPrefixStore.values()].reduce((a, s) => a + s.size, 0);
+      console.log(`[ClickSafe] SB prefixes restored: ${total}`);
+
+      const age = Date.now() - (stored.sbPrefixesUpdated || 0);
+      if (age > SB_REFRESH_MS) updateSbPrefixes();
+    } else {
+      console.log("[ClickSafe] No SB prefixes stored, fetching...");
+      updateSbPrefixes();
+    }
+  } catch (err) {
+    console.warn("[ClickSafe] SB restore failed:", err.message);
+    updateSbPrefixes();
+  }
 }
 
 
 // ============================================================
-//  FEATURE 1: ICON COLOR UPDATE
+//  STARTUP
 // ============================================================
 
-chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
-  if (changeInfo.status === "complete" && tab.url) {
-    if (tab.url.startsWith("https://")) {
-      chrome.action.setIcon({ tabId, path: { 16: "assets/logo/16.png" } });
-    } else if (tab.url.startsWith("http://")) {
-      chrome.action.setIcon({ tabId, path: { 16: "assets/logo/16-red.png" } });
+loadTrackerBlocklist();
+loadSbPrefixesFromStorage();
+setInterval(updateSbPrefixes, SB_REFRESH_MS);
+
+
+// ============================================================
+//  FEATURE 1: ICON COLOUR + COOKIE SCAN ON TAB LOAD
+// ============================================================
+
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" || !tab.url) return;
+
+  // Reset tab-scoped data for fresh scan
+  await chrome.storage.local.remove([
+    `cookieData_${tabId}`,
+    `trackerData_${tabId}`,
+    `mixedContent_${tabId}`,
+    `privacyScore_${tabId}`,
+    `linksChecked_${tabId}`
+  ]);
+  chrome.action.setBadgeText({ text: '', tabId });
+  chrome.storage.local.set({ [`tabUrl_${tabId}`]: tab.url });
+
+  // Icon colour
+  const icon = tab.url.startsWith("https://")
+    ? "assets/logo/16.png"
+    : tab.url.startsWith("http://")
+      ? "assets/logo/16-red.png"
+      : null;
+  if (icon) chrome.action.setIcon({ tabId, path: { 16: icon } });
+
+  // Cookie scan
+  if (currentSettings.cookiesEnabled) {
+    try {
+      const cookieData = await scanAllCookiesForUrl(tab.url, tabId);
+      if (cookieData && !cookieData.error) {
+        await chrome.storage.local.set({
+          [`cookieData_${tabId}`]:    cookieData,
+          lastPageTracking:           cookieData.trackers,
+          totalCookiesFound:          cookieData.totalCookies
+        });
+        const prev = await chrome.storage.local.get(['totalCookieTrackersFound']);
+        await chrome.storage.local.set({
+          totalCookieTrackersFound: (prev.totalCookieTrackersFound || 0) + cookieData.trackingCookies
+        });
+        updateThreatBadge(tabId);
+      }
+    } catch (err) {
+      console.error('[ClickSafe Cookie]', err);
     }
   }
 });
@@ -220,106 +494,114 @@ chrome.tabs.onUpdated.addListener(function (tabId, changeInfo, tab) {
 //  MESSAGE LISTENER
 // ============================================================
 
-chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
-  // Settings updated
   if (message.type === "SETTINGS_UPDATED") {
     currentSettings = { ...DEFAULT_SETTINGS, ...message.settings };
     return;
   }
 
-  // Feature 2: Mixed content
+  // Mixed content — written by content.js DOM scan (Feature 2)
+  // FIX: stores to mixedContent_${tabId} which badge + sidebar both read
   if (message.type === "MIXED_CONTENT_DETECTED") {
     if (!currentSettings.httpsEnabled) return;
-    chrome.storage.local.get(["totalMixedContent"], function (result) {
-      chrome.storage.local.set({ totalMixedContent: (result.totalMixedContent || 0) + message.data.resources.length });
+    const tabId = sender.tab?.id;
+    chrome.storage.local.get(["totalMixedContent"], result => {
+      chrome.storage.local.set({
+        totalMixedContent:         (result.totalMixedContent || 0) + message.data.resources.length,
+        [`mixedContent_${tabId}`]: { count: message.data.resources.length, resources: message.data.resources }
+      }, () => { if (tabId) updateThreatBadge(tabId); });
     });
+    return;
   }
 
-  // Feature 3: Trackers detected (per-tab storage)
+  // Trackers detected (per-tab)
   if (message.type === "TRACKERS_DETECTED") {
     if (!currentSettings.cookiesEnabled) return;
-    const tabId = sender.tab ? sender.tab.id : null;
-    chrome.storage.local.get(["trackerLog", "totalTrackersFound", "tabTrackers"], function (result) {
-      const log = result.trackerLog || [];
-      const total = result.totalTrackersFound || 0;
-      const tabTrackers = result.tabTrackers || {};
+    const tabId = sender.tab?.id ?? null;
+    chrome.storage.local.get(["trackerLog", "totalTrackersFound", "tabTrackers"], result => {
+      const log         = result.trackerLog   || [];
+      const tabTrackers = result.tabTrackers  || {};
       log.push(message.data);
       if (tabId !== null) tabTrackers[tabId] = message.data.trackers;
       chrome.storage.local.set({
-        trackerLog: log,
-        totalTrackersFound: total + message.data.trackers.length,
-        tabTrackers
-      });
+        trackerLog:                  log,
+        totalTrackersFound:          (result.totalTrackersFound || 0) + message.data.trackers.length,
+        tabTrackers,
+        [`trackerData_${tabId}`]:    { count: message.data.trackers.length }
+      }, () => { if (tabId) updateThreatBadge(tabId); });
     });
+    return;
   }
 
-  // Content script asking background to check a tracker domain
+  // Tracker hostname lookup from content.js
   if (message.type === "CHECK_TRACKER") {
     sendResponse({ isTracker: isTracker(message.hostname) });
     return true;
   }
 
-  // Feature 4: Check link safety — local hash check first, then backend
+  // Link safety — three-tier
   if (message.type === "CHECK_LINK") {
-    if (!currentSettings.linksEnabled) {
-      sendResponse({ safe: true });
-      return true;
+    if (!currentSettings.linksEnabled) { sendResponse({ safe: true }); return true; }
+
+    // Increment per-tab link check counter (shown in sidebar)
+    const senderTabId = sender.tab?.id;
+    if (senderTabId) {
+      chrome.storage.local.get([`linksChecked_${senderTabId}`], r => {
+        chrome.storage.local.set({
+          [`linksChecked_${senderTabId}`]: (r[`linksChecked_${senderTabId}`] || 0) + 1
+        });
+      });
     }
 
     try {
       const parsed = new URL(message.url);
-      if (currentSettings.whitelist.some(entry =>
-        parsed.hostname === entry || parsed.hostname.endsWith("." + entry)
+      if (currentSettings.whitelist.some(e =>
+        parsed.hostname === e || parsed.hostname.endsWith("." + e)
       )) {
-        sendResponse({ safe: true });
+        sendResponse({ safe: true, source: "whitelist" });
         return true;
       }
     } catch (_) {}
 
-    // Try local hash check first
     checkUrlLocally(message.url).then(localResult => {
-      if (localResult && localResult.safe === true) {
-        // Confirmed safe locally — no network call needed
+      if (localResult?.safe === true) {
         sendResponse({ safe: true, source: "local" });
-      } else if (localResult && localResult.needsConfirmation) {
-        // Local prefix match — confirm with backend
+      } else if (localResult?.needsConfirmation) {
         fetch(`${BACKEND_URL}/api/check-link`, {
-          method: "POST",
+          method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: message.url, hash: localResult.hash, threatType: localResult.threatType })
+          body:    JSON.stringify({ url: message.url, hash: localResult.hash, threatType: localResult.threatType })
         })
-        .then(res => res.json())
-        .then(data => sendResponse({ ...data, source: "confirmed" }))
+        .then(r => r.json())
+        .then(d => sendResponse({ ...d, source: "confirmed" }))
         .catch(() => sendResponse({ safe: false, threat: "API_UNAVAILABLE" }));
       } else {
-        // No local data — fall back to backend
         fetch(`${BACKEND_URL}/api/check-link`, {
-          method: "POST",
+          method:  "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url: message.url })
+          body:    JSON.stringify({ url: message.url })
         })
-        .then(res => res.json())
-        .then(data => sendResponse({ ...data, source: "backend" }))
+        .then(r => r.json())
+        .then(d => sendResponse({ ...d, source: "backend" }))
         .catch(() => sendResponse({ safe: false, threat: "API_UNAVAILABLE" }));
       }
     });
-
     return true;
   }
 
-  // Feature 8: Dark patterns
+  // Dark patterns
   if (message.type === "DARK_PATTERNS_DETECTED") {
-    chrome.storage.local.get(["darkPatternLog", "totalDarkPatterns"], function (result) {
+    chrome.storage.local.get(["darkPatternLog", "totalDarkPatterns"], result => {
       const log = result.darkPatternLog || [];
-      const total = result.totalDarkPatterns || 0;
       log.push(message.data);
       chrome.storage.local.set({
-        darkPatternLog: log,
-        totalDarkPatterns: total + message.data.count,
+        darkPatternLog:      log,
+        totalDarkPatterns:   (result.totalDarkPatterns || 0) + message.data.count,
         lastPageDarkPatterns: message.data.patterns
       });
     });
+    return;
   }
 
 });
@@ -329,51 +611,52 @@ chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
 //  FEATURE 5: DOWNLOAD BLOCKER
 // ============================================================
 
-chrome.downloads.onCreated.addListener(async function (downloadItem) {
+chrome.downloads.onCreated.addListener(async downloadItem => {
   if (!currentSettings.downloadsEnabled) return;
 
-  const url = downloadItem.url;
-  const filename = downloadItem.filename || "";
-  chrome.downloads.pause(downloadItem.id);
+  const { url, filename = "", id } = downloadItem;
+  chrome.downloads.pause(id);
 
   try {
-    const response = await fetch(`${BACKEND_URL}/api/check-download`, {
-      method: "POST",
+    const res  = await fetch(`${BACKEND_URL}/api/check-download`, {
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, filename })
+      body:    JSON.stringify({ url, filename })
     });
-    const data = await response.json();
+    const data = await res.json();
 
     if (data.safe) {
-      chrome.downloads.resume(downloadItem.id);
+      chrome.downloads.resume(id);
     } else {
-      chrome.downloads.cancel(downloadItem.id);
-      chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
-        if (tabs[0]) {
-          chrome.tabs.sendMessage(tabs[0].id, {
-            type: "SHOW_DOWNLOAD_WARNING",
-            url, filename, threat: data.threat
-          });
-        }
+      chrome.downloads.cancel(id);
+      chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, {
+          type: "SHOW_DOWNLOAD_WARNING", url, filename, threat: data.threat
+        });
       });
     }
-  } catch (error) {
-    console.error("[ClickSafe] Download check failed, cancelling:", error.message);
-    chrome.downloads.cancel(downloadItem.id);
+  } catch (err) {
+    console.error("[ClickSafe Download] check failed, cancelling:", err.message);
+    chrome.downloads.cancel(id);
   }
 });
 
 
-// Clean up per-tab tracker data on tab close
-chrome.tabs.onRemoved.addListener(function (tabId) {
-  chrome.storage.local.get(["tabTrackers"], function (result) {
+// Clean up per-tab data on tab close
+chrome.tabs.onRemoved.addListener(tabId => {
+  chrome.storage.local.get(["tabTrackers"], result => {
     const tabTrackers = result.tabTrackers || {};
     delete tabTrackers[tabId];
     chrome.storage.local.set({ tabTrackers });
   });
+  chrome.storage.local.remove([
+    `cookieData_${tabId}`,
+    `trackerData_${tabId}`,
+    `mixedContent_${tabId}`,
+    `tabUrl_${tabId}`,
+    `privacyScore_${tabId}`,
+    `linksChecked_${tabId}`
+  ]);
 });
 
-// Periodically refresh Safe Browsing prefix list
-setInterval(updateSbPrefixes, SB_REFRESH_INTERVAL_MS);
-
-console.log("[ClickSafe] Background service worker started");
+console.log("[ClickSafe] Background service worker started ✅");

@@ -1,44 +1,70 @@
 // ============================================================
 //  ClickSafe — content.js
-//  Injected into every webpage the user visits
+//  Injected into every web page.
 //  Handles: HTTPS Monitor, Tracker Detection (blocklist-based),
-//           Link Hover Preview (debounced), Dark Pattern Detector
+//           Link Hover Preview (debounced), Dark Pattern Detector,
+//           Real-Time Privacy Banner
 // ============================================================
 
-
 // ============================================================
-//  FEATURE 2: HTTPS MONITOR
+//  FEATURE 1: HTTPS MONITOR
+//  Scans the current page for HTTP resources loaded on HTTPS pages
+//  (mixed content detection)
 // ============================================================
 
 function scanForMixedContent() {
-  if (window.location.protocol !== "https:") return;
+  if (!window.location.href.startsWith("https://")) return;
 
   const mixedResources = [];
-  document.querySelectorAll("img[src^='http://']").forEach(el =>
-    mixedResources.push({ type: "image", url: el.src }));
-  document.querySelectorAll("script[src^='http://']").forEach(el =>
-    mixedResources.push({ type: "script", url: el.src }));
-  document.querySelectorAll("iframe[src^='http://']").forEach(el =>
-    mixedResources.push({ type: "iframe", url: el.src }));
-  document.querySelectorAll("link[rel='stylesheet'][href^='http://']").forEach(el =>
-    mixedResources.push({ type: "stylesheet", url: el.href }));
+
+  // Check all images loading over HTTP
+  document.querySelectorAll("img[src^='http://']").forEach(el => {
+    mixedResources.push({ type: "image", url: el.src });
+  });
+
+  // Check all scripts loading over HTTP
+  document.querySelectorAll("script[src^='http://']").forEach(el => {
+    mixedResources.push({ type: "script", url: el.src });
+  });
+
+  // Check all iframes loading over HTTP
+  document.querySelectorAll("iframe[src^='http://']").forEach(el => {
+    mixedResources.push({ type: "iframe", url: el.src });
+  });
+
+  // Check all stylesheets loading over HTTP
+  document.querySelectorAll("link[rel='stylesheet'][href^='http://']").forEach(el => {
+    mixedResources.push({ type: "stylesheet", url: el.href });
+  });
 
   if (mixedResources.length > 0) {
+    console.log(`[ClickSafe] ⚠️ Mixed content found: ${mixedResources.length} HTTP resource(s) on HTTPS page`);
+    console.table(mixedResources);
+
     chrome.runtime.sendMessage({
       type: "MIXED_CONTENT_DETECTED",
-      data: { pageUrl: window.location.href, resources: mixedResources, timestamp: new Date().toISOString() }
+      data: {
+        pageUrl: window.location.href,
+        resources: mixedResources,
+        timestamp: new Date().toISOString()
+      }
     });
+  } else {
+    console.log("[ClickSafe] ✅ No mixed content detected on this page");
   }
 }
 
-scanForMixedContent();
+// Run the scan once the page is fully loaded
+// content.js runs at document_idle — DOM is ready, call directly
+// Wrap in setTimeout(0) so any synchronous page scripts finish first
+setTimeout(scanForMixedContent, 0);
 
 
 // ============================================================
-//  FEATURE 3: TRACKER DETECTOR
-//  Checks script src domains against the background's
+//  FEATURE 2: TRACKER DETECTOR
+//  Checks script/resource src domains against the background's
 //  loaded Disconnect.me blocklist (~70k entries).
-//  No hardcoded list — ask background to do the lookup.
+//  No hardcoded list — asks background to do the lookup.
 // ============================================================
 
 async function checkHostname(hostname) {
@@ -51,8 +77,8 @@ async function checkHostname(hostname) {
 }
 
 async function scanForTrackingScripts() {
-  const scripts = Array.from(document.querySelectorAll("script[src]"));
   const foundTrackers = [];
+  const scripts = Array.from(document.querySelectorAll("script[src]"));
 
   // Check all script srcs in parallel against the blocklist
   await Promise.all(scripts.map(async el => {
@@ -83,6 +109,9 @@ async function scanForTrackingScripts() {
   }));
 
   if (foundTrackers.length > 0) {
+    console.log(`[ClickSafe] 🍪 Tracking scripts found: ${foundTrackers.length}`);
+    console.table(foundTrackers);
+
     chrome.runtime.sendMessage({
       type: "TRACKERS_DETECTED",
       data: {
@@ -91,14 +120,17 @@ async function scanForTrackingScripts() {
         timestamp: new Date().toISOString()
       }
     });
+  } else {
+    console.log("[ClickSafe] ✅ No tracking scripts detected on this page");
   }
 }
 
-scanForTrackingScripts();
+// Run tracker scan on page load
+setTimeout(scanForTrackingScripts, 0);
 
 
 // ============================================================
-//  FEATURE 4: LINK HOVER PREVIEW
+//  FEATURE 3: LINK HOVER CHECKER
 //  Debounced + pending-guard: at most one in-flight check
 //  per URL. Local hash check happens in background.js first —
 //  only confirmed threats reach the modal.
@@ -136,80 +168,181 @@ function handleLinkHover(url) {
 
 const debouncedHover = debounce(handleLinkHover, 300);
 
-document.querySelectorAll("a[href]").forEach(link => {
-  link.addEventListener("mouseenter", function () {
-    debouncedHover(this.href);
-  });
-});
-
-
-// ============================================================
-//  WARNING MODAL
-// ============================================================
-
-function showWarningModal({ type, url, threat, filename }) {
-  const existing = document.getElementById("clicksafe-modal-overlay");
-  if (existing) existing.remove();
-
-  const container = document.createElement("div");
-  container.innerHTML = `
-    <div id="clicksafe-modal-overlay" style="
-      position: fixed; top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6);
-      z-index: 999999;
-      display: flex; align-items: center; justify-content: center;
-      font-family: Arial, sans-serif;
-    ">
-      <div style="
-        background: white; border-radius: 12px;
-        padding: 32px; max-width: 420px; width: 90%;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3); text-align: center;
-      ">
-        <div style="font-size: 48px; margin-bottom: 12px;">
-          ${type === "download" ? "🚨" : "⚠️"}
-        </div>
-        <h2 style="color: #dc2626; margin: 0 0 8px 0; font-size: 20px;">
-          ${type === "download" ? "Dangerous Download Blocked!" : "Dangerous Link Detected!"}
-        </h2>
-        <p style="color: #6b7280; margin: 0 0 8px 0; font-size: 14px;">
-          Threat: <strong>${threat}</strong>
-        </p>
-        <p style="color: #374151; margin: 0 0 24px 0; font-size: 13px; word-break: break-all;">
-          ${filename || url}
-        </p>
-        <div style="display: flex; gap: 12px; justify-content: center;">
-          <button id="clicksafe-go-back" style="
-            background: #16a34a; color: white; border: none;
-            padding: 10px 24px; border-radius: 8px;
-            font-size: 14px; cursor: pointer; font-weight: bold;
-          ">Go Back (Safe)</button>
-          <button id="clicksafe-proceed" style="
-            background: #f3f4f6; color: #6b7280;
-            border: 1px solid #d1d5db; padding: 10px 24px;
-            border-radius: 8px; font-size: 14px; cursor: pointer;
-          ">Proceed Anyway (Risky)</button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-  document.getElementById("clicksafe-go-back").addEventListener("click", () => container.remove());
-  document.getElementById("clicksafe-proceed").addEventListener("click", () => container.remove());
-}
-
-window.clicksafeShowModal = showWarningModal;
-
-chrome.runtime.onMessage.addListener(function (message) {
-  if (message.type === "SHOW_DOWNLOAD_WARNING") {
-    showWarningModal({ type: "download", url: message.url, filename: message.filename, threat: message.threat });
+document.addEventListener("mouseover", function (e) {
+  const link = e.target.closest("a[href]");
+  if (link) {
+    debouncedHover(link.href);
   }
 });
 
 
 // ============================================================
-//  FEATURE 8: DARK PATTERN DETECTOR
+//  FEATURE 4: WARNING MODAL
+// ============================================================
+
+function showWarningModal({ type, url, filename, threat }) {
+  // Remove existing modal if any
+  const existing = document.getElementById("clicksafe-modal-container");
+  if (existing) existing.remove();
+
+  // Create modal container
+  const container = document.createElement("div");
+  container.id = "clicksafe-modal-container";
+  container.style.cssText = `
+    all: initial;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.6);
+    z-index: 2147483647;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  `;
+
+  const target = type === "download" ? (filename || url) : url;
+  const icon = type === "download" ? "🚨" : "⚠️";
+  const title = type === "download" ? "Dangerous Download Blocked" : "Dangerous Link Detected";
+
+  container.innerHTML = `
+    <div style="
+      background: white; border-radius: 12px; padding: 28px;
+      max-width: 440px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    ">
+      <div style="font-size: 48px; margin-bottom: 12px;">${icon}</div>
+      <h2 style="margin: 0 0 8px; font-size: 18px; color: #dc2626;">${title}</h2>
+      <p style="margin: 0 0 16px; font-size: 13px; color: #6b7280;">
+        Threat: <strong>${threat}</strong>
+      </p>
+      <p style="margin: 0 0 20px; font-size: 12px; color: #9ca3af; word-break: break-all;">
+        ${target}
+      </p>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button id="clicksafe-go-back" style="
+          background: #dc2626; color: white; border: none;
+          padding: 10px 20px; border-radius: 8px; cursor: pointer;
+          font-size: 14px; font-weight: 600;
+        ">Go Back</button>
+        <button id="clicksafe-proceed" style="
+          background: #f3f4f6; color: #374151; border: none;
+          padding: 10px 20px; border-radius: 8px; cursor: pointer;
+          font-size: 14px;
+        ">Proceed Anyway</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  // Button actions
+  document.getElementById("clicksafe-go-back").addEventListener("click", () => {
+    container.remove();
+  });
+
+  document.getElementById("clicksafe-proceed").addEventListener("click", () => {
+    container.remove();
+  });
+}
+
+// Make showWarningModal available globally for background.js messages
+console.log("[ClickSafe] content.js loaded ✅");
+
+
+// ============================================================
+//  FEATURE 5: REAL-TIME PRIVACY BANNER
+//  Injected into the page when privacy score drops below 50.
+//  background.js sends SHOW_PRIVACY_BANNER after every scan.
+// ============================================================
+
+const BANNER_ID = 'clicksafe-privacy-banner';
+
+function showPrivacyBanner({ score, topReason, total }) {
+  if (document.getElementById(BANNER_ID)) return;
+
+  const isRed    = score < 35;
+  const bgColor  = isRed ? '#fef2f2' : '#fffbeb';
+  const border   = isRed ? '#fca5a5' : '#fcd34d';
+  const iconBg   = isRed ? '#fee2e2' : '#fef3c7';
+  const iconText = isRed ? '#dc2626' : '#d97706';
+  const text     = isRed ? '#7f1d1d' : '#78350f';
+  const label    = isRed ? 'High Risk' : 'Moderate Risk';
+
+  const banner = document.createElement('div');
+  banner.id = BANNER_ID;
+
+  banner.style.cssText = `
+    all: initial;
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+    background: ${bgColor};
+    border-bottom: 1.5px solid ${border};
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+    z-index: 2147483647;
+    position: fixed;
+    top: 0;
+  `;
+
+  banner.innerHTML = `
+    <div style="
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    ">
+      <div style="
+        background: ${iconBg};
+        border-radius: 50%;
+        width: 32px; height: 32px;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+        font-size: 16px;
+      ">🛡️</div>
+
+      <div style="flex: 1; min-width: 0;">
+        <span style="
+          font-size: 13px; font-weight: 600;
+          color: ${iconText}; margin-right: 8px;
+        ">ClickSafe · ${label}</span>
+        <span style="font-size: 13px; color: ${text};">
+          Privacy score <strong style="color:${iconText};">${score}/100</strong>
+          &nbsp;·&nbsp; ${topReason}
+        </span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+        <span style="
+          font-size: 11px; color: ${text}; opacity: 0.7;
+        ">${total} threat${total !== 1 ? 's' : ''} detected</span>
+
+        <button id="clicksafe-banner-dismiss" style="
+          background: none; border: 1px solid ${border};
+          border-radius: 6px; padding: 4px 10px;
+          font-size: 12px; color: ${text};
+          cursor: pointer; font-family: inherit;
+        ">Dismiss</button>
+      </div>
+    </div>
+  `;
+
+  document.body.insertBefore(banner, document.body.firstChild);
+
+  document.getElementById('clicksafe-banner-dismiss')
+    .addEventListener('click', hidePrivacyBanner);
+}
+
+function hidePrivacyBanner() {
+  const banner = document.getElementById(BANNER_ID);
+  if (banner) banner.remove();
+}
+
+
+// ============================================================
+//  FEATURE 6: DARK PATTERN DETECTOR
 // ============================================================
 
 const DARK_PATTERNS = {
@@ -341,3 +474,31 @@ function showDarkPatternBadge(count) {
 
 runDarkPatternDetector();
 setTimeout(runDarkPatternDetector, 2500);
+
+
+// ============================================================
+//  MESSAGE LISTENER
+// ============================================================
+
+chrome.runtime.onMessage.addListener(function (message) {
+  if (message.type === "SHOW_DOWNLOAD_WARNING") {
+    showWarningModal({
+      type: "download",
+      url: message.url,
+      filename: message.filename,
+      threat: message.threat
+    });
+  }
+
+  if (message.type === 'SHOW_PRIVACY_BANNER') {
+    showPrivacyBanner({
+      score:     message.score,
+      topReason: message.topReason,
+      total:     message.total
+    });
+  }
+
+  if (message.type === 'HIDE_PRIVACY_BANNER') {
+    hidePrivacyBanner();
+  }
+});

@@ -75,9 +75,11 @@ function loadStats(tabId) {
     "totalCookieTrackersFound",
   ];
 
-  if (tabId) {
+  if (tabId !== undefined && tabId !== null) {
     keys.push(
       `trackerData_${tabId}`,
+      `netTrackers_${tabId}`,
+      "tabTrackers",
       `mixedContent_${tabId}`,
       `cookieData_${tabId}`,
       `privacyScore_${tabId}`
@@ -91,6 +93,8 @@ function loadStats(tabId) {
     const pageTrackerCount = result[`trackerData_${tabId}`]?.count           || 0;
     const pageMixedCount   = result[`mixedContent_${tabId}`]?.count          || 0;
     const cookieData       = result[`cookieData_${tabId}`]                   || {};
+    const netTrackers      = result[`netTrackers_${tabId}`]?.domains         || [];
+    const domTrackers      = (result.tabTrackers?.[tabId] || []).map(t => t.tracker).filter(Boolean);
 
     document.getElementById("stat-trackers").textContent       = pageTrackerCount;
     document.getElementById("stat-mixed").textContent          = pageMixedCount;
@@ -105,6 +109,13 @@ function loadStats(tabId) {
 
     if (cookieData.trackers?.length > 0) {
       displayCookieTrackers(cookieData.trackers);
+    }
+
+    const mergedTrackers = [...new Set([...(domTrackers || []), ...(netTrackers || [])])].sort();
+    if (mergedTrackers.length > 0) {
+      displayTrackers(mergedTrackers);
+    } else {
+      hideTrackers();
     }
 
     // ── Privacy score ──────────────────────────────────────
@@ -151,6 +162,26 @@ function displayCookieTrackers(trackers) {
         </div>
       </div>`;
   }).join("");
+}
+
+function displayTrackers(domains) {
+  const section = document.getElementById("tracker-details-section");
+  const list = document.getElementById("tracker-list");
+  if (!section || !list) return;
+
+  section.style.display = "block";
+
+  list.innerHTML = (domains || []).map(d => `
+    <div class="cookie-item">
+      <span class="cookie-domain">${d}</span>
+      <span class="cookie-name">Tracker domain</span>
+    </div>
+  `).join("");
+}
+
+function hideTrackers() {
+  const section = document.getElementById("tracker-details-section");
+  if (section) section.style.display = "none";
 }
 
 // Re-run after 2s to catch async background writes

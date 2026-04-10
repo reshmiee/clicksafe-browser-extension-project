@@ -18,6 +18,11 @@ chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
   loadStats(tab.id);
 });
 
+let activeTabId = null;
+chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
+  activeTabId = tabs[0]?.id ?? null;
+});
+
 // ============================================================
 //  PRIVACY SCORE — same formula as background.js
 //  Keep in sync with computePrivacyScore() in background.js
@@ -159,4 +164,14 @@ document.getElementById("close-btn").addEventListener("click", () => window.clos
 
 document.getElementById("settings-btn").addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("pages/settings/settings.html") });
+});
+
+document.getElementById("reset-totals-btn").addEventListener("click", () => {
+  chrome.storage.local.set({
+    totalTrackersFound: 0,
+    totalMixedContent: 0,
+    totalCookieTrackersFound: 0
+  }, () => {
+    if (activeTabId !== null) loadStats(activeTabId);
+  });
 });

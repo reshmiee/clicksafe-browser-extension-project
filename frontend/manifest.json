@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ClickSafe",
-  "version": "1.0.0",
-  "description": "Real-time browser security: HTTPS enforcement, tracker detection, link safety, and download scanning.",
+  "version": "1.1.0",
+  "description": "Real-time browser security: HTTPS enforcement, tracker detection (70k+ blocklist), link safety, download scanning, and dark pattern detection.",
 
   "icons": {
     "16": "assets/logo/16.png",
@@ -11,12 +11,12 @@
   },
 
   "action": {
-  "default_icon": {
-    "16": "assets/logo/16.png",
-    "48": "assets/logo/48.png"
-  },
-  "default_title": "ClickSafe",
-  "default_popup": "content/sidebar/sidebar.html"
+    "default_icon": {
+      "16": "assets/logo/16.png",
+      "48": "assets/logo/48.png"
+    },
+    "default_title": "ClickSafe",
+    "default_popup": "content/sidebar/sidebar.html"
   },
 
   "background": {
@@ -37,19 +37,19 @@
     "storage",
     "cookies",
     "downloads",
-    "webRequest",
     "activeTab",
     "scripting",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess"
   ],
+
   "declarative_net_request": {
     "rule_resources": [
-        {
-            "id": "ruleset_1",
-            "enabled": true,
-            "path": "rules.json"
-        }
+      {
+        "id": "ruleset_1",
+        "enabled": true,
+        "path": "rules.json"
+      }
     ]
   },
 
@@ -63,6 +63,7 @@
         "content/sidebar/sidebar.html",
         "content/modal/modal.html",
         "pages/settings/settings.html",
+        "data/trackers.json",
         "assets/logo/16.png",
         "assets/logo/48.png",
         "assets/logo/128.png",

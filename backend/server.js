@@ -1,11 +1,12 @@
+// dotenv MUST be configured before any other require() that reads process.env
+require("dotenv").config();
+
 const express = require("express");
 const cors = require("./middleware/cors");
 const rateLimiter = require("./middleware/rateLimiter");
 const errorHandler = require("./middleware/errorHandler");
 const checkLinkRoute = require("./routes/checkLink");
 const checkDownloadRoute = require("./routes/checkDownload");
-
-require("dotenv").config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;

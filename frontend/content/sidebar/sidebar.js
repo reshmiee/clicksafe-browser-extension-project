@@ -3,12 +3,13 @@
 //  Loads stats from chrome.storage and populates sidebar UI
 // ============================================================
 
-// Get current tab URL and security status
+// Get current tab URL, security status, and per-tab tracker data
 chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
   const tab = tabs[0];
   if (!tab) return;
 
   const url = tab.url || "";
+  const tabId = tab.id;
   const isHttps = url.startsWith("https://");
 
   // Show URL
@@ -23,27 +24,28 @@ chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
     badge.textContent = "Not Secure (HTTP)";
     badge.className = "badge insecure";
   }
-});
 
-// Load stats from chrome.storage
-chrome.storage.local.get([
-  "lastPageTrackers",
-  "totalTrackersFound",
-  "totalMixedContent",
-  "mixedContentLog"
-], function (result) {
-  // This page trackers
-  const pageTrackers = result.lastPageTrackers || [];
-  document.getElementById("stat-trackers").textContent = pageTrackers.length;
+  // Load stats, using per-tab tracker data for the active tab
+  chrome.storage.local.get([
+    "tabTrackers",
+    "totalTrackersFound",
+    "totalMixedContent",
+    "mixedContentLog"
+  ], function (result) {
+    // Per-tab trackers — accurate for the current tab only
+    const tabTrackers = result.tabTrackers || {};
+    const pageTrackers = tabTrackers[tabId] || [];
+    document.getElementById("stat-trackers").textContent = pageTrackers.length;
 
-  // Mixed content on this page (last entry in log)
-  const mixedLog = result.mixedContentLog || [];
-  const lastMixed = mixedLog.length > 0 ? mixedLog[mixedLog.length - 1].resources.length : 0;
-  document.getElementById("stat-mixed").textContent = lastMixed;
+    // Mixed content on this page (last entry in log)
+    const mixedLog = result.mixedContentLog || [];
+    const lastMixed = mixedLog.length > 0 ? mixedLog[mixedLog.length - 1].resources.length : 0;
+    document.getElementById("stat-mixed").textContent = lastMixed;
 
-  // Session totals
-  document.getElementById("stat-total-trackers").textContent = result.totalTrackersFound || 0;
-  document.getElementById("stat-total-mixed").textContent = result.totalMixedContent || 0;
+    // Session totals
+    document.getElementById("stat-total-trackers").textContent = result.totalTrackersFound || 0;
+    document.getElementById("stat-total-mixed").textContent = result.totalMixedContent || 0;
+  });
 });
 
 // Close button

@@ -1,27 +1,30 @@
 // ============================================================
 //  ClickSafe — middleware/cors.js
-//  Allows requests only from the Chrome/Edge extension
+//  Allows requests only from Chrome/Edge/Firefox extensions
 // ============================================================
 
 module.exports = function (req, res, next) {
-  const origin = req.headers.origin || "";
+  const origin = req.headers.origin;
 
-  // Allow requests from Chrome/Edge extensions and local dev
+  // Only allow real extension origins — reject empty/missing origin
   const allowed =
-    origin.startsWith("chrome-extension://") ||
-    origin.startsWith("moz-extension://") ||
-    origin === "http://localhost:3000" ||
-    origin === "";
+    origin &&
+    (origin.startsWith("chrome-extension://") ||
+      origin.startsWith("moz-extension://"));
 
   if (allowed) {
-    res.setHeader("Access-Control-Allow-Origin", origin || "*");
+    res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   }
 
   // Handle preflight OPTIONS request
   if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
+    return allowed ? res.sendStatus(204) : res.sendStatus(403);
+  }
+
+  if (!allowed) {
+    return res.status(403).json({ error: "Forbidden: requests must come from the ClickSafe extension" });
   }
 
   next();

@@ -1,55 +1,114 @@
 // ============================================================
 //  ClickSafe — services/safeBrowsingService.js
-//  Calls Google Safe Browsing API to check if a URL is safe
+//
+//  Two modes:
+//  1. Full URL check  — used as fallback when no local hash data
+//  2. Hash confirmation — used when the extension finds a local
+//     prefix match and needs to confirm with the full hash
 // ============================================================
 
-const fetch = require("node-fetch");
+const THREAT_TYPES = [
+  "MALWARE",
+  "SOCIAL_ENGINEERING",
+  "UNWANTED_SOFTWARE",
+  "POTENTIALLY_HARMFUL_APPLICATION"
+];
 
+function getApiKey() {
+  const key = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
+  if (!key || key === "YOUR_API_KEY_HERE") {
+    throw new Error("GOOGLE_SAFE_BROWSING_API_KEY is not configured");
+  }
+  return key;
+}
+
+// ── Full URL lookup (fallback path) ──────────────────────────
 async function checkUrl(url) {
-  const API_KEY = process.env.GOOGLE_SAFE_BROWSING_API_KEY;
-  const API_URL = `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${API_KEY}`;
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        client: {
-          clientId: "clicksafe",
-          clientVersion: "1.0.0"
-        },
-        threatInfo: {
-          threatTypes: [
-            "MALWARE",
-            "SOCIAL_ENGINEERING",
-            "UNWANTED_SOFTWARE",
-            "POTENTIALLY_HARMFUL_APPLICATION"
-          ],
-          platformTypes: ["ANY_PLATFORM"],
-          threatEntryTypes: ["URL"],
-          threatEntries: [{ url }]
-        }
-      })
-    });
+    const API_KEY = getApiKey();
+    const response = await fetch(
+      `https://safebrowsing.googleapis.com/v4/threatMatches:find?key=${API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client: { clientId: "clicksafe", clientVersion: "1.0.0" },
+          threatInfo: {
+            threatTypes: THREAT_TYPES,
+            platformTypes: ["ANY_PLATFORM"],
+            threatEntryTypes: ["URL"],
+            threatEntries: [{ url }]
+          }
+        })
+      }
+    );
+
+    if (!response.ok) throw new Error(`Google API HTTP ${response.status}`);
 
     const data = await response.json();
-    console.log("[ClickSafe] Google API response:", JSON.stringify(data)); // ADD THIS
-
-    // If matches array exists and has items, URL is dangerous
     if (data.matches && data.matches.length > 0) {
-      return {
-        safe: false,
-        threat: data.matches[0].threatType
-      };
+      return { safe: false, threat: data.matches[0].threatType };
     }
-
-    // No matches = safe
     return { safe: true };
 
   } catch (error) {
-    console.error("[ClickSafe] Safe Browsing API error:", error.message);
-    // If API fails, default to safe (don't block everything)
-    return { safe: true };
+    console.error("[ClickSafe] Safe Browsing full check error:", error.message);
+    return { safe: false, threat: "API_UNAVAILABLE" };
   }
 }
 
-module.exports = { checkUrl };
+// ── Full-hash confirmation (local-first path) ─────────────────
+// Called when the extension finds a local prefix match.
+// We confirm with the full SHA-256 hash using the fullHashes:find endpoint.
+async function confirmHash(fullHashHex, threatType) {
+  try {
+    const API_KEY = getApiKey();
+
+    // Convert hex string to base64 for the API
+    const hashBytes = Buffer.from(fullHashHex, "hex");
+    const hashBase64 = hashBytes.toString("base64");
+    // Prefix is first 4 bytes
+    const prefixBase64 = hashBytes.slice(0, 4).toString("base64");
+
+    const response = await fetch(
+      `https://safebrowsing.googleapis.com/v4/fullHashes:find?key=${API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          client: { clientId: "clicksafe", clientVersion: "1.0.0" },
+          clientStates: [],
+          threatInfo: {
+            threatTypes: [threatType],
+            platformTypes: ["ANY_PLATFORM"],
+            threatEntryTypes: ["URL"],
+            threatEntries: [{ hash: prefixBase64 }]
+          }
+        })
+      }
+    );
+
+    if (!response.ok) throw new Error(`Google API HTTP ${response.status}`);
+
+    const data = await response.json();
+
+    // Check if the full hash appears in the response matches
+    if (data.matches) {
+      for (const match of data.matches) {
+        const matchHashHex = Buffer.from(match.threat.hash, "base64").toString("hex");
+        if (matchHashHex === fullHashHex) {
+          return { safe: false, threat: match.threatType };
+        }
+      }
+    }
+
+    // Prefix matched locally but full hash didn't confirm — false positive
+    return { safe: true };
+
+  } catch (error) {
+    console.error("[ClickSafe] Hash confirmation error:", error.message);
+    return { safe: false, threat: "API_UNAVAILABLE" };
+  }
+}
+
+module.exports = { checkUrl, confirmHash };

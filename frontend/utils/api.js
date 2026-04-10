@@ -1,11 +1,17 @@
 // ============================================================
 //  ClickSafe — utils/api.js
-//  Handles all communication between extension and backend API
+//  Handles all communication between extension and backend API.
+//  Used by background.js via chrome.runtime.sendMessage routing.
 // ============================================================
 
-const BACKEND_URL = "http://localhost:3000"; // Change to production URL when deployed
+const BACKEND_URL = "http://localhost:3000"; // Replace with your deployed backend URL
 
-// Check if a link is safe
+/**
+ * Checks if a link URL is safe via the ClickSafe backend.
+ * Fails closed — returns { safe: false } if the API is unreachable.
+ * @param {string} url
+ * @returns {Promise<{safe: boolean, threat?: string}>}
+ */
 async function checkLink(url) {
   try {
     const response = await fetch(`${BACKEND_URL}/api/check-link`, {
@@ -14,19 +20,23 @@ async function checkLink(url) {
       body: JSON.stringify({ url })
     });
 
-    if (!response.ok) throw new Error("API request failed");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    const data = await response.json();
-    return data;
+    return await response.json();
 
   } catch (error) {
     console.error("[ClickSafe] Link check failed:", error.message);
-    // If backend is unreachable, assume safe (don't block everything)
-    return { safe: true };
+    return { safe: false, threat: "API_UNAVAILABLE" };
   }
 }
 
-// Check if a download is safe
+/**
+ * Checks if a download URL is safe via the ClickSafe backend.
+ * Fails closed — returns { safe: false } if the API is unreachable.
+ * @param {string} url
+ * @param {string} [filename]
+ * @returns {Promise<{safe: boolean, threat?: string}>}
+ */
 async function checkDownload(url, filename) {
   try {
     const response = await fetch(`${BACKEND_URL}/api/check-download`, {
@@ -35,13 +45,12 @@ async function checkDownload(url, filename) {
       body: JSON.stringify({ url, filename })
     });
 
-    if (!response.ok) throw new Error("API request failed");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-    const data = await response.json();
-    return data;
+    return await response.json();
 
   } catch (error) {
     console.error("[ClickSafe] Download check failed:", error.message);
-    return { safe: true };
+    return { safe: false, threat: "API_UNAVAILABLE" };
   }
 }

@@ -27,6 +27,4 @@ frontend/content/styles/output.css
 *.temp
 
 # Browser extension auto-generated
-_metadata/**/.env
-**/.env
-frontend/_metadata/
+_metadata/

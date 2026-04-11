@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ClickSafe",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Real-time browser security: HTTPS enforcement, tracker detection (70k+ blocklist), link safety, download scanning, and dark pattern detection.",
 
   "icons": {
@@ -15,8 +15,11 @@
       "16": "assets/logo/16.png",
       "48": "assets/logo/48.png"
     },
-    "default_title": "ClickSafe",
-    "default_popup": "content/sidebar/sidebar.html"
+    "default_title": "ClickSafe"
+  },
+
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
   },
 
   "background": {
@@ -40,6 +43,7 @@
     "webRequest",
     "activeTab",
     "scripting",
+    "sidePanel",
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess"
   ],
@@ -61,7 +65,6 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "content/sidebar/sidebar.html",
         "content/modal/modal.html",
         "pages/settings/settings.html",
         "data/trackers.json",

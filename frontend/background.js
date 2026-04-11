@@ -188,19 +188,7 @@ async function updateThreatBadge(tabId) {
     const trackerThreats = data[`trackerData_${tabId}`]?.count           || 0;
     const mixedThreats   = data[`mixedContent_${tabId}`]?.count          || 0;
     const tabUrl         = data[`tabUrl_${tabId}`]                       || '';
-    
-    // Check URL prefix first
-    const urlSaysHttps = tabUrl.startsWith("https://");
-
-    // Now verify the certificate is actually valid by checking tab title.
-    // When Chrome hits a cert error (expired, invalid, self-signed),
-    // it sets the tab title to "Privacy error" — even if the URL starts with https://
-    let tab = null;
-    try { tab = await chrome.tabs.get(tabId); } catch (e) {}
-    const hasCertError = tab?.title?.toLowerCase().includes("privacy error") ||
-                        tab?.title?.toLowerCase().includes("your connection isn't private");
-
-const isHttps = urlSaysHttps && !hasCertError;
+    const isHttps        = tabUrl.startsWith('https://');
 
     const total = cookieThreats + trackerThreats + mixedThreats;
 
@@ -448,6 +436,15 @@ async function loadSbPrefixesFromStorage() {
 //  STARTUP
 // ============================================================
 
+
+// ============================================================
+//  SIDE PANEL — open when user clicks the extension icon
+// ============================================================
+
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch(err => console.warn('[ClickSafe] sidePanel.setPanelBehavior:', err));
+
 loadTrackerBlocklist();
 loadSbPrefixesFromStorage();
 setInterval(updateSbPrefixes, SB_REFRESH_MS);
@@ -458,35 +455,23 @@ setInterval(updateSbPrefixes, SB_REFRESH_MS);
 // ============================================================
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  if (!tab?.url) return;
+  if (changeInfo.status !== "complete" || !tab.url) return;
 
-  // Reset tab-scoped data at navigation start (NOT at complete),
-  // otherwise webRequest-based mixed content captured during load
-  // is wiped before the sidebar reads it.
-  if (changeInfo.status === "loading") {
-    await chrome.storage.local.remove([
-      `cookieData_${tabId}`,
-      `trackerData_${tabId}`,
-      `netTrackers_${tabId}`,
-      `mixedContent_${tabId}`,
-      `privacyScore_${tabId}`,
-      `linksChecked_${tabId}`
-    ]);
-    chrome.action.setBadgeText({ text: '', tabId });
-    chrome.storage.local.set({ [`tabUrl_${tabId}`]: tab.url });
-    return;
-  }
-
-  if (changeInfo.status !== "complete") return;
+  // Reset tab-scoped data for fresh scan
+  await chrome.storage.local.remove([
+    `cookieData_${tabId}`,
+    `trackerData_${tabId}`,
+    `mixedContent_${tabId}`,
+    `privacyScore_${tabId}`,
+    `linksChecked_${tabId}`
+  ]);
+  chrome.action.setBadgeText({ text: '', tabId });
+  chrome.storage.local.set({ [`tabUrl_${tabId}`]: tab.url });
 
   // Icon colour
-  // Same cert error check — tab object is already available here
-  const hasCertError = tab?.title?.toLowerCase().includes("privacy error") ||
-                      tab?.title?.toLowerCase().includes("your connection isn't private");
-
-  const icon = (tab.url.startsWith("https://") && !hasCertError)
+  const icon = tab.url.startsWith("https://")
     ? "assets/logo/16.png"
-    : tab.url.startsWith("http://") || hasCertError
+    : tab.url.startsWith("http://")
       ? "assets/logo/16-red.png"
       : null;
   if (icon) chrome.action.setIcon({ tabId, path: { 16: icon } });
@@ -513,96 +498,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-// ============================================================
-//  FEATURE 2b: TRACKER DETECTOR (Network-level via webRequest)
-//
-//  Why: Modern sites load trackers via XHR/fetch/beacon/etc. that never
-//  appear as <script> tags in the DOM. This listener records unique
-//  tracker domains per tab and merges them with the existing DOM scan.
-// ============================================================
-
-function _unique(arr) {
-  return [...new Set((arr || []).filter(Boolean))];
-}
-
-function _getHostname(url) {
-  try { return new URL(url).hostname; } catch { return ""; }
-}
-
-function _mergeTrackerDomains(domDomains, netDomains) {
-  return _unique([...(domDomains || []), ...(netDomains || [])]);
-}
-
-function _updateTrackerCountsForTab({ tabId, domDomains, netDomains }) {
-  chrome.storage.local.get(
-    ["totalTrackersFound", `trackerData_${tabId}`],
-    result => {
-      const merged = _mergeTrackerDomains(domDomains, netDomains);
-      const before = result[`trackerData_${tabId}`]?.count || 0;
-      const after  = merged.length;
-      const delta  = Math.max(0, after - before);
-
-      chrome.storage.local.set({
-        totalTrackersFound:       (result.totalTrackersFound || 0) + delta,
-        [`trackerData_${tabId}`]: { count: after }
-      }, () => { updateThreatBadge(tabId); });
-    }
-  );
-}
-
-function _recordNetworkTrackerHit({ tabId, hostname, url, reqType }) {
-  if (tabId === undefined || tabId === null || tabId < 0) return;
-  if (!hostname) return;
-
-  chrome.storage.local.get(
-    [`netTrackers_${tabId}`, "tabTrackers"],
-    result => {
-      const existingNet = result[`netTrackers_${tabId}`] || { domains: [], hits: [] };
-      const netDomains  = _unique(existingNet.domains);
-
-      const isNewDomain = !netDomains.includes(hostname);
-      if (isNewDomain) netDomains.push(hostname);
-
-      // Keep a small rolling list of recent hits for debugging / future UI.
-      const hits = Array.isArray(existingNet.hits) ? existingNet.hits.slice(-199) : [];
-      hits.push({ tracker: hostname, url, type: reqType, ts: Date.now() });
-
-      const domDomains = (result.tabTrackers?.[tabId] || []).map(t => t.tracker).filter(Boolean);
-
-      chrome.storage.local.set({
-        [`netTrackers_${tabId}`]: { domains: netDomains, hits }
-      }, () => {
-        if (isNewDomain) {
-          _updateTrackerCountsForTab({ tabId, domDomains, netDomains });
-        }
-      });
-    }
-  );
-}
-
-chrome.webRequest.onBeforeRequest.addListener(
-  details => {
-    try {
-      if (!currentSettings.cookiesEnabled) return;
-      if (details.tabId === undefined || details.tabId === null || details.tabId < 0) return;
-      if (!details.url) return;
-      if (details.type === "main_frame") return;
-
-      const hostname = _getHostname(details.url);
-      if (!hostname) return;
-      if (!isTracker(hostname)) return;
-
-      _recordNetworkTrackerHit({
-        tabId: details.tabId,
-        hostname,
-        url: details.url,
-        reqType: details.type || "other"
-      });
-    } catch (_) {}
-  },
-  { urls: ["<all_urls>"] }
-);
-
 
 // ============================================================
 //  MESSAGE LISTENER
@@ -620,23 +515,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "MIXED_CONTENT_DETECTED") {
     if (!currentSettings.httpsEnabled) return;
     const tabId = sender.tab?.id;
-    if (tabId === undefined || tabId === null || tabId < 0) return;
-
-    const incoming = (message.data?.resources || []).map(r => ({
-      type: r.type || 'resource',
-      url: r.url || '',
-      source: 'dom'
-    }));
-
-    chrome.storage.local.get(["totalMixedContent", `mixedContent_${tabId}`], result => {
-      const existing = result[`mixedContent_${tabId}`]?.resources || [];
-      const merged = _mergeMixedResources(existing, incoming);
-      const added = merged.length - (Array.isArray(existing) ? existing.length : 0);
-
+    chrome.storage.local.get(["totalMixedContent"], result => {
       chrome.storage.local.set({
-        totalMixedContent:         (result.totalMixedContent || 0) + Math.max(0, added),
-        [`mixedContent_${tabId}`]: { count: merged.length, resources: merged }
-      }, () => { updateThreatBadge(tabId); });
+        totalMixedContent:         (result.totalMixedContent || 0) + message.data.resources.length,
+        [`mixedContent_${tabId}`]: { count: message.data.resources.length, resources: message.data.resources }
+      }, () => { if (tabId) updateThreatBadge(tabId); });
     });
     return;
   }
@@ -645,20 +528,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "TRACKERS_DETECTED") {
     if (!currentSettings.cookiesEnabled) return;
     const tabId = sender.tab?.id ?? null;
-    if (tabId === null) return;
-    chrome.storage.local.get(["trackerLog", "tabTrackers", `netTrackers_${tabId}`], result => {
+    chrome.storage.local.get(["trackerLog", "totalTrackersFound", "tabTrackers"], result => {
       const log         = result.trackerLog   || [];
       const tabTrackers = result.tabTrackers  || {};
       log.push(message.data);
       if (tabId !== null) tabTrackers[tabId] = message.data.trackers;
-      const domDomains = (message.data.trackers || []).map(t => t.tracker).filter(Boolean);
-      const netDomains = result[`netTrackers_${tabId}`]?.domains || [];
       chrome.storage.local.set({
         trackerLog:                  log,
+        totalTrackersFound:          (result.totalTrackersFound || 0) + message.data.trackers.length,
         tabTrackers,
-      }, () => {
-        _updateTrackerCountsForTab({ tabId, domDomains, netDomains });
-      });
+        [`trackerData_${tabId}`]:    { count: message.data.trackers.length }
+      }, () => { if (tabId) updateThreatBadge(tabId); });
     });
     return;
   }
@@ -704,7 +584,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         })
         .then(r => r.json())
         .then(d => sendResponse({ ...d, source: "confirmed" }))
-        .catch(() => sendResponse({ safe: true, source: "api_unavailable" }));
+        .catch(() => sendResponse({ safe: false, threat: "API_UNAVAILABLE" }));
       } else {
         fetch(`${BACKEND_URL}/api/check-link`, {
           method:  "POST",
@@ -713,7 +593,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         })
         .then(r => r.json())
         .then(d => sendResponse({ ...d, source: "backend" }))
-        .catch(() => sendResponse({ safe: true, source: "api_unavailable" }));
+        .catch(() => sendResponse({ safe: false, threat: "API_UNAVAILABLE" }));
       }
     });
     return true;
@@ -734,85 +614,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
 });
-
-// ============================================================
-//  FEATURE 1b: HTTPS MONITOR — webRequest mixed content capture
-//
-//  Why: DOM scans miss mixed content because modern browsers block
-//  insecure (http://) subresource requests before they appear in DOM.
-//  This listener records attempted http:// subresource requests whose
-//  tab is currently on an https:// page.
-// ============================================================
-
-function _normaliseMixedTypeFromWebRequest(type) {
-  const map = {
-    script: 'script',
-    image: 'image',
-    stylesheet: 'stylesheet',
-    object: 'object',
-    sub_frame: 'iframe',
-    xmlhttprequest: 'xhr',
-    media: 'media',
-    font: 'font',
-    ping: 'ping',
-    other: 'resource',
-    main_frame: 'document'
-  };
-  return map[type] || type || 'resource';
-}
-
-function _mergeMixedResources(existing, incoming) {
-  const key = r => `${r.type || 'resource'}|${r.url || ''}`;
-  const out = Array.isArray(existing) ? existing.slice() : [];
-  const seen = new Set(out.map(key));
-  for (const r of (Array.isArray(incoming) ? incoming : [])) {
-    const nr = { type: r.type || 'resource', url: r.url || '', source: r.source };
-    const k = key(nr);
-    if (!seen.has(k) && nr.url) {
-      out.push(nr);
-      seen.add(k);
-    }
-  }
-  return out;
-}
-
-function _recordMixedContent(tabId, resource) {
-  if (tabId === undefined || tabId === null || tabId < 0) return;
-  chrome.storage.local.get(["totalMixedContent", `mixedContent_${tabId}`], result => {
-    const existing = result[`mixedContent_${tabId}`]?.resources || [];
-    const merged = _mergeMixedResources(existing, [resource]);
-    const added = merged.length - (Array.isArray(existing) ? existing.length : 0);
-    if (added <= 0) return;
-
-    chrome.storage.local.set({
-      totalMixedContent:         (result.totalMixedContent || 0) + added,
-      [`mixedContent_${tabId}`]: { count: merged.length, resources: merged }
-    }, () => { updateThreatBadge(tabId); });
-  });
-}
-
-chrome.webRequest.onBeforeRequest.addListener(
-  details => {
-    try {
-      if (!currentSettings.httpsEnabled) return;
-      if (!details?.url || !details.url.startsWith('http://')) return;
-      if (details.tabId === undefined || details.tabId === null || details.tabId < 0) return;
-      if (details.type === 'main_frame') return;
-
-      // Prefer request metadata over chrome.tabs.get() because during early navigation
-      // the tab URL can be stale (about:blank) even though an HTTPS document is loading.
-      const initiator = details.initiator || details.documentUrl || '';
-      if (!initiator.startsWith('https://')) return;
-
-      _recordMixedContent(details.tabId, {
-        type: _normaliseMixedTypeFromWebRequest(details.type),
-        url: details.url,
-        source: 'webRequest'
-      });
-    } catch (_) {}
-  },
-  { urls: ["<all_urls>"] }
-);
 
 
 // ============================================================
@@ -860,7 +661,6 @@ chrome.tabs.onRemoved.addListener(tabId => {
   chrome.storage.local.remove([
     `cookieData_${tabId}`,
     `trackerData_${tabId}`,
-    `netTrackers_${tabId}`,
     `mixedContent_${tabId}`,
     `tabUrl_${tabId}`,
     `privacyScore_${tabId}`,

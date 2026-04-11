@@ -1,36 +1,18 @@
 // ============================================================
 //  ClickSafe — sidepanel.js
-//
-//  ARCHITECTURE:
-//  The side panel NEVER queries tabs or listens to tab events
-//  directly — those APIs are unreliable inside a panel page.
-//
-//  Instead:
-//  - background.js owns all tab watching (onActivated, onUpdated)
-//  - When a tab changes or finishes loading, background.js sends
-//    a PANEL_UPDATE message with the full stats payload
-//  - sidepanel.js only listens for that message and renders
-//  - On first open, sidepanel.js asks background.js for the
-//    current tab's stats via GET_CURRENT_TAB_STATS
 // ============================================================
 
-const CIRCUMFERENCE = 201.1; // 2π × 32
+const CIRCUMFERENCE = 201.1;
 
-// ── On open: ask background for current tab stats immediately ─
 chrome.runtime.sendMessage({ type: "GET_CURRENT_TAB_STATS" }, response => {
   if (chrome.runtime.lastError) return;
   if (response) render(response);
 });
 
-// ── Listen for push updates from background.js ───────────────
 chrome.runtime.onMessage.addListener((message) => {
-  if (message.type === "PANEL_UPDATE") {
-    render(message.payload);
-  }
+  if (message.type === "PANEL_UPDATE") render(message.payload);
 });
 
-
-// ── Render all stats from a payload object ───────────────────
 function render(payload) {
   if (!payload) return;
 
@@ -45,10 +27,9 @@ function render(payload) {
     totalTrackersFound      = 0,
     totalMixedContent       = 0,
     totalCookieTrackersFound = 0,
-    totalLinksChecked       = 0,   // NEW: session total links
+    totalLinksChecked       = 0,
   } = payload;
 
-  // URL + HTTPS badge
   setText("page-url", url || "—");
   const badge = document.getElementById("page-badge");
   if (badge) {
@@ -56,14 +37,12 @@ function render(payload) {
     badge.className   = "badge " + (isHttps ? "secure" : "insecure");
   }
 
-  // This page stats
-  setText("stat-trackers",         pageTrackerCount);
-  setText("stat-mixed",            pageMixedCount);
-  setText("stat-total-cookies",    cookieData.totalCookies    || 0);
-  setText("stat-cookie-trackers",  cookieData.trackingCookies || 0);
-  setText("stat-links",            linksChecked);
+  setText("stat-trackers",        pageTrackerCount);
+  setText("stat-mixed",           pageMixedCount);
+  setText("stat-total-cookies",   cookieData.totalCookies    || 0);
+  setText("stat-cookie-trackers", cookieData.trackingCookies || 0);
+  setText("stat-links",           linksChecked);
 
-  // Cookie tracker details
   if (cookieData.trackers?.length > 0) {
     displayCookieTrackers(cookieData.trackers);
   } else {
@@ -71,7 +50,6 @@ function render(payload) {
     if (section) section.style.display = "none";
   }
 
-  // Privacy score gauge
   const finalScore = (score !== undefined) ? score : computePrivacyScore({
     isHttps,
     trackingCookies: cookieData.trackingCookies || 0,
@@ -80,15 +58,12 @@ function render(payload) {
   });
   renderGauge(finalScore);
 
-  // Session totals — now includes tracker scripts + links checked
   setText("stat-total-cookie-trackers", totalCookieTrackersFound);
   setText("stat-total-trackers",        totalTrackersFound);
   setText("stat-total-mixed",           totalMixedContent);
-  setText("stat-total-links",           totalLinksChecked);  // NEW
+  setText("stat-total-links",           totalLinksChecked);
 }
 
-
-// ── Privacy score formula (keep in sync with background.js) ──
 function computePrivacyScore({ isHttps, trackingCookies, trackers, mixedContent }) {
   let score = 100;
   if (!isHttps)      score -= 30;
@@ -149,7 +124,10 @@ function displayCookieTrackers(trackers) {
   }).join("");
 }
 
-// Settings button
 document.getElementById("settings-btn")?.addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("pages/settings/settings.html") });
+});
+
+document.getElementById("dashboard-btn")?.addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("pages/dashboard/dashboard.html") });
 });

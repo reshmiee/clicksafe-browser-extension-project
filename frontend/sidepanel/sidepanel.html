@@ -5,225 +5,74 @@
   <title>ClickSafe</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
-      background: #f9fafb;
-      height: 100vh;
-      overflow-y: auto;
-      overflow-x: hidden;
+      background: #f9fafb; height: 100vh; overflow-y: auto; overflow-x: hidden;
     }
-
-    /* ── Header ───────────────────────────────────────── */
     .header {
-      background: #1e40af;
-      color: white;
-      padding: 14px 16px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      background: #1e40af; color: white; padding: 14px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
     }
-
     .header-left { display: flex; align-items: center; gap: 10px; }
-    .header h1   { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
-    .header-sub  { font-size: 11px; opacity: 0.75; margin-top: 1px; }
-
+    .header h1 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; }
+    .header-sub { font-size: 11px; opacity: 0.75; margin-top: 1px; }
     .settings-btn {
-      background: rgba(255,255,255,0.15);
-      border: none;
-      color: white;
-      width: 32px; height: 32px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 15px;
-      display: flex; align-items: center; justify-content: center;
+      background: rgba(255,255,255,0.15); border: none; color: white;
+      width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+      font-size: 15px; display: flex; align-items: center; justify-content: center;
       transition: background 0.2s;
     }
     .settings-btn:hover { background: rgba(255,255,255,0.25); }
-
-    /* ── Privacy Score ────────────────────────────────── */
     .score-section {
-      padding: 16px;
-      border-bottom: 1px solid #e5e7eb;
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      background: white;
+      padding: 16px; border-bottom: 1px solid #e5e7eb;
+      display: flex; align-items: center; gap: 16px; background: white;
     }
-
-    .gauge-wrap {
-      position: relative;
-      width: 76px;
-      height: 76px;
-      flex-shrink: 0;
-    }
-
-    .gauge-wrap svg {
-      width: 76px;
-      height: 76px;
-      transform: rotate(-90deg);
-    }
-
+    .gauge-wrap { position: relative; width: 76px; height: 76px; flex-shrink: 0; }
+    .gauge-wrap svg { width: 76px; height: 76px; transform: rotate(-90deg); }
     .gauge-bg  { fill: none; stroke: #e5e7eb; stroke-width: 8; }
-
     .gauge-arc {
-      fill: none;
-      stroke-width: 8;
-      stroke-linecap: round;
+      fill: none; stroke-width: 8; stroke-linecap: round;
       transition: stroke-dashoffset 0.6s ease, stroke 0.4s ease;
     }
-
     .gauge-text {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      pointer-events: none;
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; pointer-events: none;
     }
-
     .gauge-number { font-size: 19px; font-weight: 700; line-height: 1; }
     .gauge-label  { font-size: 9px; color: #9ca3af; margin-top: 2px; letter-spacing: 0.04em; }
-
-    .score-info   { flex: 1; min-width: 0; }
-    .score-info h2 {
-      font-size: 11px;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 5px;
-    }
-
+    .score-info { flex: 1; min-width: 0; }
+    .score-info h2 { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 5px; }
     .score-verdict { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
     .score-desc    { font-size: 11px; color: #6b7280; line-height: 1.4; }
-
-    /* ── Current Page ─────────────────────────────────── */
-    .section {
-      padding: 14px 16px;
-      border-bottom: 1px solid #e5e7eb;
-      background: white;
-    }
-
-    .section + .section { margin-top: 6px; }
-
-    .section-title {
-      font-size: 11px;
-      color: #6b7280;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 10px;
-      font-weight: 600;
-    }
-
-    .page-url {
-      font-size: 11px;
-      color: #374151;
-      word-break: break-all;
-      background: #f3f4f6;
-      padding: 7px 10px;
-      border-radius: 6px;
-      line-height: 1.4;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 3px 10px;
-      border-radius: 999px;
-      font-size: 11px;
-      font-weight: 700;
-      margin-top: 8px;
-    }
+    .section { padding: 14px 16px; border-bottom: 1px solid #e5e7eb; background: white; }
+    .section-title { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; font-weight: 600; }
+    .page-url { font-size: 11px; color: #374151; word-break: break-all; background: #f3f4f6; padding: 7px 10px; border-radius: 6px; line-height: 1.4; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; margin-top: 8px; }
     .badge.secure   { background: #dcfce7; color: #15803d; }
     .badge.insecure { background: #fee2e2; color: #dc2626; }
-
-    /* ── Stat rows ────────────────────────────────────── */
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 7px 0;
-      border-bottom: 1px solid #f3f4f6;
-      font-size: 13px;
-      color: #374151;
-    }
+    .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 7px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; color: #374151; }
     .stat-row:last-child { border-bottom: none; }
-
     .stat-label { display: flex; align-items: center; gap: 6px; }
-
-    .stat-value {
-      font-weight: 700;
-      font-size: 15px;
-      color: #1e40af;
-      min-width: 24px;
-      text-align: right;
-    }
+    .stat-value { font-weight: 700; font-size: 15px; color: #1e40af; min-width: 24px; text-align: right; }
     .stat-value.danger { color: #dc2626; }
-
-    /* ── Cookie detail ────────────────────────────────── */
-    .cookie-item {
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      border-radius: 6px;
-      padding: 9px 10px;
-      margin-bottom: 6px;
-      font-size: 12px;
+    .cookie-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 9px 10px; margin-bottom: 6px; font-size: 12px; }
+    .cookie-domain { font-weight: 700; color: #dc2626; display: block; margin-bottom: 2px; font-size: 11px; }
+    .cookie-name { color: #6b7280; font-size: 10px; display: block; }
+    .cookie-reasons { margin-top: 5px; padding-top: 5px; border-top: 1px solid #e5e7eb; display: flex; flex-wrap: wrap; gap: 4px; }
+    .reason-tag { background: #fef3c7; color: #92400e; padding: 2px 6px; border-radius: 4px; font-size: 10px; }
+    .section-gap { height: 6px; background: #f3f4f6; }
+    .footer { padding: 12px 16px; text-align: center; font-size: 10px; color: #9ca3af; background: #f9fafb; border-top: 1px solid #e5e7eb; }
+    .btn-row { display: flex; gap: 8px; padding: 12px 16px; background: white; border-bottom: 1px solid #e5e7eb; }
+    .btn-action {
+      flex: 1; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      cursor: pointer; border: none; text-align: center; font-family: inherit;
     }
-
-    .cookie-domain {
-      font-weight: 700;
-      color: #dc2626;
-      display: block;
-      margin-bottom: 2px;
-      font-size: 11px;
-    }
-
-    .cookie-name {
-      color: #6b7280;
-      font-size: 10px;
-      display: block;
-    }
-
-    .cookie-reasons {
-      margin-top: 5px;
-      padding-top: 5px;
-      border-top: 1px solid #e5e7eb;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-    }
-
-    .reason-tag {
-      background: #fef3c7;
-      color: #92400e;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 10px;
-    }
-
-    /* ── Divider between sections ─────────────────────── */
-    .section-gap {
-      height: 6px;
-      background: #f3f4f6;
-    }
-
-    /* ── Footer ───────────────────────────────────────── */
-    .footer {
-      padding: 12px 16px;
-      text-align: center;
-      font-size: 10px;
-      color: #9ca3af;
-      background: #f9fafb;
-      border-top: 1px solid #e5e7eb;
-    }
+    .btn-dashboard { background: #1e40af; color: white; }
+    .btn-settings  { background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; }
   </style>
 </head>
 <body>
-
-  <!-- Header -->
   <div class="header">
     <div class="header-left">
       <div>
@@ -234,7 +83,6 @@
     <button class="settings-btn" id="settings-btn" title="Settings">⚙️</button>
   </div>
 
-  <!-- Privacy Score Gauge -->
   <div class="score-section">
     <div class="gauge-wrap">
       <svg viewBox="0 0 76 76" xmlns="http://www.w3.org/2000/svg">
@@ -257,9 +105,14 @@
     </div>
   </div>
 
+  <!-- Quick action buttons -->
+  <div class="btn-row">
+    <button class="btn-action btn-dashboard" id="dashboard-btn">📊 Dashboard</button>
+    <button class="btn-action btn-settings"  id="settings-btn2">⚙️ Settings</button>
+  </div>
+
   <div class="section-gap"></div>
 
-  <!-- Current Page -->
   <div class="section">
     <div class="section-title">Current Page</div>
     <div class="page-url" id="page-url">Loading…</div>
@@ -268,10 +121,8 @@
 
   <div class="section-gap"></div>
 
-  <!-- This Page Stats -->
   <div class="section">
     <div class="section-title">This Page</div>
-
     <div class="stat-row">
       <span class="stat-label">🍪 Cookie Trackers</span>
       <span class="stat-value danger" id="stat-cookie-trackers">0</span>
@@ -294,7 +145,6 @@
     </div>
   </div>
 
-  <!-- Cookie Trackers Detail (hidden until trackers found) -->
   <div class="section" id="cookie-details-section" style="display:none;">
     <div class="section-title">Tracking Cookies Detected</div>
     <div id="cookie-list" style="max-height:220px; overflow-y:auto;"></div>
@@ -302,7 +152,6 @@
 
   <div class="section-gap"></div>
 
-  <!-- Session Totals — now includes Tracker Scripts + Links Checked -->
   <div class="section">
     <div class="section-title">Session Total</div>
     <div class="stat-row">
@@ -323,8 +172,16 @@
     </div>
   </div>
 
-  <div class="footer">ClickSafe v1.1.0</div>
+  <div class="footer">ClickSafe v1.3.0</div>
 
   <script src="sidepanel.js"></script>
+  <script>
+    document.getElementById("dashboard-btn")?.addEventListener("click", () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL("pages/dashboard/dashboard.html") });
+    });
+    document.getElementById("settings-btn2")?.addEventListener("click", () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL("pages/settings/settings.html") });
+    });
+  </script>
 </body>
 </html>

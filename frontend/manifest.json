@@ -1,15 +1,13 @@
 {
   "manifest_version": 3,
   "name": "ClickSafe",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Real-time browser security: HTTPS enforcement, tracker detection (70k+ blocklist), link safety, download scanning, and dark pattern detection.",
-
   "icons": {
     "16": "assets/logo/16.png",
     "48": "assets/logo/48.png",
     "128": "assets/logo/128.png"
   },
-
   "action": {
     "default_icon": {
       "16": "assets/logo/16.png",
@@ -17,24 +15,26 @@
     },
     "default_title": "ClickSafe"
   },
-
   "side_panel": {
     "default_path": "sidepanel/sidepanel.html"
   },
-
   "background": {
     "service_worker": "background.js"
   },
-
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["content/content.js"],
-      "css": ["content/styles/output.css"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content/content.js"
+      ],
+      "css": [
+        "content/styles/output.css"
+      ],
       "run_at": "document_idle"
     }
   ],
-
   "permissions": [
     "tabs",
     "storage",
@@ -47,7 +47,6 @@
     "declarativeNetRequest",
     "declarativeNetRequestWithHostAccess"
   ],
-
   "declarative_net_request": {
     "rule_resources": [
       {
@@ -57,11 +56,9 @@
       }
     ]
   },
-
   "host_permissions": [
     "<all_urls>"
   ],
-
   "web_accessible_resources": [
     {
       "resources": [
@@ -71,9 +68,12 @@
         "assets/logo/16.png",
         "assets/logo/48.png",
         "assets/logo/128.png",
-        "assets/logo/16-red.png"
+        "assets/logo/16-red.png",
+        "pages/dashboard/dashboard.html"
       ],
-      "matches": ["<all_urls>"]
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ]
 }

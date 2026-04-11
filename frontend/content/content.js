@@ -127,6 +127,7 @@ async function scanForTrackingScripts() {
 
 // Run tracker scan on page load
 setTimeout(scanForTrackingScripts, 0);
+setTimeout(scanForTrackingScripts, 3000);  // ADD: re-scan after 3s for lazy-loaded scripts
 
 
 // ============================================================

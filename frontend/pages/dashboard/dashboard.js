@@ -53,15 +53,27 @@ function renderOverview(data) {
   setText('dash-https',           httpsRedirects);
   setText('dash-blocked',         blocked);
 
-  // Privacy score — compute from session data
-  const score = computeScore({
-    cookieTrackers, trackerScripts, mixedContent
-  });
+  // FIX F11: detect current tab's HTTPS status from stored tabUrl keys so the
+  // dashboard score matches the side panel (which applies a -30 HTTP penalty).
+  const tabUrlKeys = Object.keys(data).filter(k => k.startsWith('tabUrl_'));
+  let isHttps = true; // default safe — penalise only when we know it's HTTP
+  if (tabUrlKeys.length > 0) {
+    // Use the most-recently-set tabUrl key (highest tabId as rough proxy)
+    const latestKey = tabUrlKeys.sort((a, b) => {
+      const idA = parseInt(a.split('_')[1]) || 0;
+      const idB = parseInt(b.split('_')[1]) || 0;
+      return idB - idA;
+    })[0];
+    isHttps = (data[latestKey] || '').startsWith('https://');
+  }
+
+  const score = computeScore({ isHttps, cookieTrackers, trackerScripts, mixedContent });
   renderGauge(score);
 }
 
-function computeScore({ cookieTrackers, trackerScripts, mixedContent }) {
+function computeScore({ isHttps = true, cookieTrackers, trackerScripts, mixedContent }) {
   let s = 100;
+  if (!isHttps)  s -= 30;                             // FIX F11: apply HTTP penalty
   s -= Math.min(cookieTrackers * 5, 30);
   s -= Math.min(trackerScripts * 4, 20);
   s -= Math.min(mixedContent   * 5, 20);
@@ -145,6 +157,15 @@ function renderHeatmap(data) {
       const entryDate = new Date(entry.timestamp).toDateString();
       const day = days.find(d => d.dateStr === entryDate);
       if (day) day.count += (entry.resources?.length || 1);
+    });
+  }
+
+  // FIX F16: also count cookie tracker events (previously missing from heatmap)
+  if (data.cookieTrackerLog) {
+    data.cookieTrackerLog.forEach(entry => {
+      const entryDate = new Date(entry.timestamp).toDateString();
+      const day = days.find(d => d.dateStr === entryDate);
+      if (day) day.count += (entry.count || 1);
     });
   }
 
@@ -237,9 +258,10 @@ function renderTimeline(data) {
   const now = new Date();
 
   const allLogs = [
-    ...(data.trackerLog     || []),
-    ...(data.darkPatternLog || []),
-    ...(data.mixedContentLog || []),
+    ...(data.trackerLog        || []),
+    ...(data.darkPatternLog    || []),
+    ...(data.mixedContentLog   || []),
+    ...(data.cookieTrackerLog  || []),  // FIX F16/F19: cookie events now in timeline too
   ];
 
   allLogs.forEach(entry => {
@@ -315,7 +337,17 @@ function renderTopDomains(data) {
     });
   });
 
-  // Count from cookie tracker data (per-tab cookie trackers)
+  // FIX F18: count from persistent cookieTrackerLog instead of ephemeral
+  // cookieData_* keys (those are wiped when a tab closes, so closed-tab
+  // cookie domains were lost from this chart).
+  (data.cookieTrackerLog || []).forEach(entry => {
+    (entry.trackers || []).forEach(t => {
+      const domain = (t.domain || '').replace(/^\./, '');
+      if (domain) domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+    });
+  });
+
+  // Also include any still-open tabs (cookieData_* keys still present)
   Object.keys(data).forEach(key => {
     if (key.startsWith('cookieData_')) {
       const cookieData = data[key];

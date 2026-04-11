@@ -152,6 +152,13 @@ function computePrivacyScore({ isHttps, trackingCookies, trackers, mixedContent 
 //  LIVE THREAT BADGE
 // ============================================================
 
+// FIX F10: Per-tab debounce timers so the privacy banner is shown only after
+// all async scans (cookies from background, trackers + mixed content from
+// content.js) have had time to land in storage.  1 500 ms covers the gap
+// between the cookie scan completing and content.js TRACKERS_DETECTED /
+// MIXED_CONTENT_DETECTED messages arriving.
+const _bannerTimers = {};
+
 async function updateThreatBadge(tabId) {
   try {
     const data = await chrome.storage.local.get([
@@ -184,19 +191,48 @@ async function updateThreatBadge(tabId) {
 
     chrome.storage.local.set({ [`privacyScore_${tabId}`]: score });
 
-    if (score < 50 && total > 0) {
-      let topReason = '';
-      if (!isHttps)            topReason = 'This page is not encrypted (HTTP)';
-      else if (cookieThreats)  topReason = `${cookieThreats} tracking cookie${cookieThreats > 1 ? 's' : ''} detected`;
-      else if (trackerThreats) topReason = `${trackerThreats} tracker script${trackerThreats > 1 ? 's' : ''} detected`;
-      else if (mixedThreats)   topReason = `${mixedThreats} mixed-content resource${mixedThreats > 1 ? 's' : ''} loaded`;
+    // FIX F10: debounce the banner message so all scan results are in storage
+    // before we decide whether to show it and what the top reason is.
+    clearTimeout(_bannerTimers[tabId]);
+    _bannerTimers[tabId] = setTimeout(async () => {
+      delete _bannerTimers[tabId];
+      try {
+        // Re-read storage after debounce so we use the fully-settled values
+        const settled = await chrome.storage.local.get([
+          `cookieData_${tabId}`,
+          `trackerData_${tabId}`,
+          `mixedContent_${tabId}`,
+          `tabUrl_${tabId}`
+        ]);
+        const sCookies  = settled[`cookieData_${tabId}`]?.trackingCookies || 0;
+        const sTrackers = settled[`trackerData_${tabId}`]?.count           || 0;
+        const sMixed    = settled[`mixedContent_${tabId}`]?.count          || 0;
+        const sUrl      = settled[`tabUrl_${tabId}`]                       || '';
+        const sHttps    = sUrl.startsWith('https://');
+        const sTotal    = sCookies + sTrackers + sMixed;
+        const sScore    = computePrivacyScore({
+          isHttps:        sHttps,
+          trackingCookies: sCookies,
+          trackers:        sTrackers,
+          mixedContent:    sMixed
+        });
+        // Persist the final settled score
+        chrome.storage.local.set({ [`privacyScore_${tabId}`]: sScore });
 
-      chrome.tabs.sendMessage(tabId, {
-        type: 'SHOW_PRIVACY_BANNER', score, topReason, total
-      }).catch(() => {});
-    } else {
-      chrome.tabs.sendMessage(tabId, { type: 'HIDE_PRIVACY_BANNER' }).catch(() => {});
-    }
+        if (sScore < 50 && sTotal > 0) {
+          let topReason = '';
+          if (!sHttps)        topReason = 'This page is not encrypted (HTTP)';
+          else if (sCookies)  topReason = `${sCookies} tracking cookie${sCookies > 1 ? 's' : ''} detected`;
+          else if (sTrackers) topReason = `${sTrackers} tracker script${sTrackers > 1 ? 's' : ''} detected`;
+          else if (sMixed)    topReason = `${sMixed} mixed-content resource${sMixed > 1 ? 's' : ''} loaded`;
+          chrome.tabs.sendMessage(tabId, {
+            type: 'SHOW_PRIVACY_BANNER', score: sScore, topReason, total: sTotal
+          }).catch(() => {});
+        } else {
+          chrome.tabs.sendMessage(tabId, { type: 'HIDE_PRIVACY_BANNER' }).catch(() => {});
+        }
+      } catch (_) {}
+    }, 1500);
 
   } catch (e) {
     console.error('[ClickSafe Badge]', e);
@@ -516,10 +552,30 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           lastPageTracking:        cookieData.trackers,
           totalCookiesFound:       cookieData.totalCookies
         });
-        const prev = await chrome.storage.local.get(['totalCookieTrackersFound']);
-        await chrome.storage.local.set({
-          totalCookieTrackersFound: (prev.totalCookieTrackersFound || 0) + cookieData.trackingCookies
-        });
+
+        // FIX F16/F18: persist a timestamped log entry for cookie tracker events
+        // so the heatmap (F16) and top-domains chart (F18) have durable data
+        // even after the tab is closed (cookieData_* keys are wiped on tab close).
+        const stored = await chrome.storage.local.get(['cookieTrackerLog', 'totalCookieTrackersFound']);
+        const updates = {
+          totalCookieTrackersFound: (stored.totalCookieTrackersFound || 0) + cookieData.trackingCookies
+        };
+        if (cookieData.trackingCookies > 0) {
+          const log = stored.cookieTrackerLog || [];
+          log.push({
+            pageUrl:   cookieData.pageUrl,
+            timestamp: cookieData.timestamp,
+            count:     cookieData.trackingCookies,
+            trackers:  cookieData.trackers.map(t => ({
+              domain: (t.cookie?.domain || '').replace(/^\./, '')
+            }))
+          });
+          // Keep log bounded — drop entries older than 30 days
+          const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+          updates.cookieTrackerLog = log.filter(e => new Date(e.timestamp).getTime() > cutoff);
+        }
+        await chrome.storage.local.set(updates);
+
         updateThreatBadge(tabId);
         pushPanelUpdate(tabId, tab.url);
       }
@@ -712,10 +768,24 @@ chrome.downloads.onCreated.addListener(async downloadItem => {
         chrome.storage.local.set({ totalThreatsBlocked: (r.totalThreatsBlocked || 0) + 1 });
       });
       if (currentSettings.modalsEnabled !== false) {
-        chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-          if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, {
+        chrome.tabs.query({ active: true, currentWindow: true }, async tabs => {
+          if (!tabs[0]) return;
+          const tabId = tabs[0].id;
+          // FIX F5/F7: ensure the content script is alive before sending.
+          // On pages where the content script hasn't loaded yet (e.g. a new tab
+          // that was opened just to trigger a download), sendMessage silently
+          // fails.  We use scripting.executeScript to inject it first if needed.
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files:  ['content/content.js']
+            });
+          } catch (_) {
+            // Already injected or a chrome:// page — either way proceed
+          }
+          chrome.tabs.sendMessage(tabId, {
             type: "SHOW_DOWNLOAD_WARNING", url, filename, threat: data.threat
-          });
+          }).catch(() => {});
         });
       }
     }

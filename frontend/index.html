@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ClickSafe — Browse Boldly. Click Safely.</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-logo">
+        <div class="logo-icon">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <path d="M14 2L4 7v8c0 5.5 4.3 10.7 10 12 5.7-1.3 10-6.5 10-12V7L14 2z" fill="#1a7a4a" opacity="0.2"/>
+            <path d="M14 2L4 7v8c0 5.5 4.3 10.7 10 12 5.7-1.3 10-6.5 10-12V7L14 2z" stroke="#1a7a4a" stroke-width="1.5" fill="none"/>
+            <path d="M10 14l3 3 5-5" stroke="#1a7a4a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <span class="logo-text">ClickSafe</span>
+      </div>
+      <ul class="nav-links">
+        <li><a href="#features">Features</a></li>
+        <li><a href="#safety-check">Safety Check</a></li>
+        <li><a href="#how-it-works">How it Works</a></li>
+        <li><a href="#pricing">Pricing <span class="free-badge">Free</span></a></li>
+      </ul>
+      <a href="#" class="btn-primary nav-cta">Add to Chrome</a>
+      <button class="mobile-menu-btn" id="mobileMenuBtn">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-bg-grid"></div>
+    <div class="container hero-flex">
+      <div class="hero-content">
+        <div class="hero-badge">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1L2 3.5v4c0 2.75 2.15 5.35 5 6 2.85-.65 5-3.25 5-6v-4L7 1z" fill="#1a7a4a"/></svg>
+          Trusted by 10,000+ users
+        </div>
+        <h1 class="hero-title">Browse Boldly.<br><span class="accent-text">Click Safely.</span></h1>
+        <p class="hero-subtitle">ClickSafe tells you if a site is safe or tracking cookies, in real-time. Instantly identify malicious links and regain control of your digital footprint.</p>
+        <div class="hero-actions">
+          <a href="#" class="btn-primary btn-large">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 1.5L3 5v6c0 4.1 3.2 8 7 9 3.8-1 7-4.9 7-9V5L10 1.5z" fill="white" opacity="0.9"/><path d="M7 10l2.5 2.5 3.5-4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Add to Chrome — It's Free
+          </a>
+          <a href="#how-it-works" class="btn-ghost">
+            See how it works
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+        <div class="hero-stats">
+          <div class="stat"><strong>85/100</strong><span>Avg Safety Score</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><strong>12+</strong><span>Trackers Blocked</span></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><strong>Real-time</strong><span>Link Scanning</span></div>
+        </div>
+      </div>
+
+      <div class="hero-mockup">
+        <div class="browser-frame">
+          <div class="browser-chrome">
+            <div class="browser-dots">
+              <span class="dot dot-red"></span>
+              <span class="dot dot-yellow"></span>
+              <span class="dot dot-green"></span>
+            </div>
+            <div class="browser-tab active-tab">ClickSafe</div>
+          </div>
+          <div class="browser-bar">
+            <span class="url-lock">🔒</span>
+            <span class="url-text">example.com</span>
+          </div>
+          <div class="browser-body">
+            <div class="site-preview">
+              <div class="site-header-bar"></div>
+              <div class="site-content-lines">
+                <div class="line l1"></div>
+                <div class="line l2"></div>
+                <div class="line l3"></div>
+              </div>
+            </div>
+            <div class="clicksafe-popup">
+              <div class="popup-header">
+                <div class="popup-logo">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 1L2 4v5c0 3.1 2.4 6 6 7 3.6-.9 6-3.9 6-7V4L8 1z" stroke="#1a7a4a" stroke-width="1.2" fill="none"/><path d="M5.5 8l2 2 3-3.5" stroke="#1a7a4a" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  ClickSafe
+                </div>
+                <span class="popup-settings">⚙</span>
+              </div>
+              <div class="popup-site">Website: [example.com]</div>
+              <div class="popup-status-safe">
+                <span class="green-dot"></span> Safe
+              </div>
+              <div class="popup-row">
+                <span class="popup-label">Overall Safety Score:</span>
+                <span class="popup-score">85/100</span>
+              </div>
+              <div class="popup-row">
+                <span class="popup-label">Cookies Detected: 4</span>
+                <span class="popup-link">View Details</span>
+              </div>
+              <div class="popup-row">
+                <span class="popup-label">Third-Party Trackers: Blocked 12</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mockup-glow"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="container">
+      <div class="features-header">
+        <div class="section-label-bar"></div>
+        <span class="section-label-text">Features</span>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon icon-blue">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="8" stroke="#2563eb" stroke-width="1.5"/><circle cx="11" cy="11" r="3" fill="#2563eb"/><path d="M11 3v2M11 17v2M3 11h2M17 11h2" stroke="#2563eb" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <h3>Cookie Transparency</h3>
+            <p>See which cookies sites are dropping before you browse.</p>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon icon-green">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 2L3 5.5v7c0 4.1 3.4 7.9 8 9 4.6-1.1 8-4.9 8-9v-7L11 2z" stroke="#16a34a" stroke-width="1.5" fill="none"/><path d="M8 11l2 2 4-4" stroke="#16a34a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <h3>Real-time Safety Rating</h3>
+            <p>Instantly know a site's security score and malicious risks.</p>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon icon-orange">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 4l1.5 5h5l-4 3 1.5 5L11 14l-4 3 1.5-5-4-3h5L11 4z" stroke="#ea580c" stroke-width="1.5" stroke-linejoin="round" fill="none"/></svg>
+          </div>
+          <div>
+            <h3>Phishing Protection</h3>
+            <p>Instant alerts if a site mimics login pages or scams.</p>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon icon-teal">
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="4" y="8" width="14" height="10" rx="2" stroke="#0d9488" stroke-width="1.5"/><path d="M8 8V6a3 3 0 016 0v2" stroke="#0d9488" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <h3>Anti-Tracker Blocking</h3>
+            <p>Stop hidden scripts from tracking your online activity.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="safety-check-section" id="safety-check">
+    <div class="container">
+      <div class="sc-inner">
+        <div class="sc-text">
+          <div class="section-label-text">Safety Check</div>
+          <h2>Test Any URL Instantly</h2>
+          <p>Paste any link below and we'll check it against our real-time safety database — no extension needed.</p>
+          <ul class="sc-list">
+            <li><span class="check-icon">✓</span> Google Safe Browsing integration</li>
+            <li><span class="check-icon">✓</span> Phishing &amp; malware detection</li>
+            <li><span class="check-icon">✓</span> Instant results in milliseconds</li>
+          </ul>
+        </div>
+        <div class="sc-widget">
+          <h3>Check a Link</h3>
+          <div class="url-input-group">
+            <input type="url" id="urlInput" placeholder="https://example.com" class="url-input" />
+            <button class="btn-check" id="checkBtn">
+              <span id="checkBtnText">Check</span>
+              <div class="spinner hidden" id="spinner"></div>
+            </button>
+          </div>
+          <div class="sc-result hidden" id="scResult">
+            <div id="resultStatus"></div>
+            <div id="resultDetails" class="result-details"></div>
+          </div>
+          <p class="sc-note">Uses the same engine as the ClickSafe extension.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how-it-works" id="how-it-works">
+    <div class="container">
+      <div class="section-header-center">
+        <div class="section-label-text">How it Works</div>
+        <h2>Up and running in 30 seconds</h2>
+        <p>Three simple steps to browse safely forever.</p>
+      </div>
+      <div class="steps-grid">
+        <div class="step-card">
+          <div class="step-number">01</div>
+          <h3>Install the Extension</h3>
+          <p>Click "Add to Chrome" — it's completely free. Works instantly with no account required.</p>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="step-card">
+          <div class="step-number">02</div>
+          <h3>Browse Normally</h3>
+          <p>ClickSafe works silently in the background, scanning every page you visit in real-time.</p>
+        </div>
+        <div class="step-arrow">→</div>
+        <div class="step-card">
+          <div class="step-number">03</div>
+          <h3>Stay Protected</h3>
+          <p>Get instant alerts for dangerous sites, blocked trackers, and full cookie transparency.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="future-features">
+    <div class="container">
+      <div class="section-header-center">
+        <div class="section-label-text">Future Features</div>
+        <h2>More Security Coming Soon</h2>
+        <p>More security tools, including VPN and safe link sharing, coming soon!</p>
+      </div>
+      <div class="future-grid">
+        <div class="future-card">
+          <div class="future-icon">🔐</div>
+          <h3>Built-in VPN</h3>
+          <p>Encrypt your traffic and hide your IP while browsing the web.</p>
+          <span class="coming-soon-badge">Coming Soon</span>
+        </div>
+        <div class="future-card">
+          <div class="future-icon">🔗</div>
+          <h3>Safe Link Sharing</h3>
+          <p>Share links with safety scores so your friends know what they're clicking.</p>
+          <span class="coming-soon-badge">Coming Soon</span>
+        </div>
+        <div class="future-card">
+          <div class="future-icon">📊</div>
+          <h3>Privacy Dashboard</h3>
+          <p>Full analytics on your browsing patterns and trackers blocked over time.</p>
+          <span class="coming-soon-badge">Coming Soon</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta-banner">
+    <div class="container">
+      <div class="cta-content">
+        <span class="cta-star">✦</span>
+        <h2>Get Peace of Mind. Install ClickSafe Today.</h2>
+        <a href="#" class="btn-primary btn-large btn-white">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 1.5L3 5v6c0 4.1 3.2 8 7 9 3.8-1 7-4.9 7-9V5L10 1.5z" fill="#1a7a4a" opacity="0.9"/><path d="M7 10l2.5 2.5 3.5-4" stroke="#1a7a4a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Add to Chrome — It's Free
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-top">
+        <div class="footer-brand">
+          <div class="nav-logo">
+            <div class="logo-icon">
+              <svg width="24" height="24" viewBox="0 0 28 28" fill="none"><path d="M14 2L4 7v8c0 5.5 4.3 10.7 10 12 5.7-1.3 10-6.5 10-12V7L14 2z" fill="#1a7a4a" opacity="0.2"/><path d="M14 2L4 7v8c0 5.5 4.3 10.7 10 12 5.7-1.3 10-6.5 10-12V7L14 2z" stroke="#1a7a4a" stroke-width="1.5" fill="none"/><path d="M10 14l3 3 5-5" stroke="#1a7a4a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <span class="logo-text">ClickSafe</span>
+          </div>
+          <p>Browse boldly, click safely. Real-time protection for the modern web.</p>
+        </div>
+        <div class="footer-links">
+          <div class="footer-col">
+            <h4>Product</h4>
+            <a href="#features">Features</a>
+            <a href="#safety-check">Safety Check</a>
+            <a href="#how-it-works">How it Works</a>
+          </div>
+          <div class="footer-col">
+            <h4>Legal</h4>
+            <a href="#">Privacy Policy</a>
+            <a href="#">Terms of Service</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>© 2025 ClickSafe. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

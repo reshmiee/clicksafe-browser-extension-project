@@ -446,14 +446,59 @@ function runDarkPatternDetector() {
 function highlightElement(el, pattern) {
   if (el.dataset.clicksafeHighlighted) return;
   el.dataset.clicksafeHighlighted = "true";
-  const wrapper = document.createElement("div");
-  wrapper.style.cssText = `display:inline-block!important;border:3px solid ${pattern.color}!important;border-radius:6px!important;padding:2px!important;background:${pattern.bgColor}!important;position:relative!important;`;
-  el.parentNode.insertBefore(wrapper, el);
-  wrapper.appendChild(el);
-  const tip = document.createElement("div");
-  tip.innerText = `⚠️ ${pattern.label}`;
-  tip.style.cssText = `position:absolute!important;top:-24px!important;left:0!important;background:${pattern.color}!important;color:white!important;font-size:11px!important;font-weight:bold!important;padding:2px 8px!important;border-radius:4px!important;z-index:2147483647!important;white-space:nowrap!important;pointer-events:none!important;font-family:Arial,sans-serif!important;`;
-  wrapper.appendChild(tip);
+
+  // Subtle light-blue text highlight — no wrapper, no border, no layout disruption
+  el.style.setProperty("background-color", "rgba(147, 210, 255, 0.45)", "important");
+  el.style.setProperty("border-radius",     "3px",                       "important");
+  el.style.setProperty("cursor",            "help",                      "important");
+  el.style.setProperty("position",          "relative",                  "important");
+
+  // Hover tooltip — injected once, shown/hidden via opacity
+  const tooltip = document.createElement("div");
+  tooltip.innerText = `⚠️ ${pattern.label}`;
+  tooltip.style.cssText = [
+    "position:fixed!important",
+    "background:#1e293b!important",
+    "color:#f1f5f9!important",
+    "font-size:12px!important",
+    "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif!important",
+    "font-weight:500!important",
+    "padding:5px 10px!important",
+    "border-radius:6px!important",
+    "box-shadow:0 4px 12px rgba(0,0,0,0.25)!important",
+    "z-index:2147483647!important",
+    "pointer-events:none!important",
+    "white-space:nowrap!important",
+    "opacity:0!important",
+    "transition:opacity 0.15s ease!important"
+  ].join(";");
+
+  document.body.appendChild(tooltip);
+
+  el.addEventListener("mouseenter", function(e) {
+    // Position tooltip near the cursor
+    const x = e.clientX + 12;
+    const y = e.clientY - 32;
+    // Keep inside viewport
+    const maxX = window.innerWidth  - tooltip.offsetWidth  - 8;
+    const maxY = window.innerHeight - tooltip.offsetHeight - 8;
+    tooltip.style.setProperty("left", Math.min(x, maxX) + "px", "important");
+    tooltip.style.setProperty("top",  Math.max(8, Math.min(y, maxY)) + "px", "important");
+    tooltip.style.setProperty("opacity", "1", "important");
+  });
+
+  el.addEventListener("mousemove", function(e) {
+    const x = e.clientX + 12;
+    const y = e.clientY - 32;
+    const maxX = window.innerWidth  - tooltip.offsetWidth  - 8;
+    const maxY = window.innerHeight - tooltip.offsetHeight - 8;
+    tooltip.style.setProperty("left", Math.min(x, maxX) + "px", "important");
+    tooltip.style.setProperty("top",  Math.max(8, Math.min(y, maxY)) + "px", "important");
+  });
+
+  el.addEventListener("mouseleave", function() {
+    tooltip.style.setProperty("opacity", "0", "important");
+  });
 }
 
 function findCheckboxLabel(cb) {

@@ -627,9 +627,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     // Increment per-tab link check counter (shown in sidebar)
     const senderTabId = sender.tab?.id;
     if (senderTabId) {
-      chrome.storage.local.get([`linksChecked_${senderTabId}`], r => {
+      chrome.storage.local.get([`linksChecked_${senderTabId}`, `tabUrl_${senderTabId}`], r => {
         chrome.storage.local.set({
           [`linksChecked_${senderTabId}`]: (r[`linksChecked_${senderTabId}`] || 0) + 1
+        }, () => {
+          // Push update so sidepanel counter increments in real time
+          pushPanelUpdate(senderTabId, r[`tabUrl_${senderTabId}`] || "");
         });
       });
     }

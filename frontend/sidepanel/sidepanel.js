@@ -18,7 +18,7 @@ const CIRCUMFERENCE = 201.1; // 2π × 32
 
 // ── On open: ask background for current tab stats immediately ─
 chrome.runtime.sendMessage({ type: "GET_CURRENT_TAB_STATS" }, response => {
-  if (chrome.runtime.lastError) return; // background may not be ready yet
+  if (chrome.runtime.lastError) return;
   if (response) render(response);
 });
 
@@ -38,13 +38,14 @@ function render(payload) {
     url = "",
     isHttps = false,
     score,
-    pageTrackerCount = 0,
-    pageMixedCount   = 0,
-    cookieData       = {},
-    linksChecked     = 0,
-    totalTrackersFound       = 0,
-    totalMixedContent        = 0,
-    totalCookieTrackersFound = 0
+    pageTrackerCount        = 0,
+    pageMixedCount          = 0,
+    cookieData              = {},
+    linksChecked            = 0,
+    totalTrackersFound      = 0,
+    totalMixedContent       = 0,
+    totalCookieTrackersFound = 0,
+    totalLinksChecked       = 0,   // NEW: session total links
   } = payload;
 
   // URL + HTTPS badge
@@ -79,10 +80,11 @@ function render(payload) {
   });
   renderGauge(finalScore);
 
-  // Session totals
+  // Session totals — now includes tracker scripts + links checked
+  setText("stat-total-cookie-trackers", totalCookieTrackersFound);
   setText("stat-total-trackers",        totalTrackersFound);
   setText("stat-total-mixed",           totalMixedContent);
-  setText("stat-total-cookie-trackers", totalCookieTrackersFound);
+  setText("stat-total-links",           totalLinksChecked);  // NEW
 }
 
 

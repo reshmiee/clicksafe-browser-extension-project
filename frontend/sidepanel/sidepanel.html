@@ -12,7 +12,6 @@
       height: 100vh;
       overflow-y: auto;
       overflow-x: hidden;
-      /* Side panel fills 100% of the Chrome side panel width — no fixed width needed */
     }
 
     /* ── Header ───────────────────────────────────────── */
@@ -239,7 +238,6 @@
   <div class="score-section">
     <div class="gauge-wrap">
       <svg viewBox="0 0 76 76" xmlns="http://www.w3.org/2000/svg">
-        <!-- r=32 → circumference = 2π×32 ≈ 201.1 -->
         <circle class="gauge-bg"  cx="38" cy="38" r="32"/>
         <circle class="gauge-arc" id="gauge-arc"
           cx="38" cy="38" r="32"
@@ -304,7 +302,7 @@
 
   <div class="section-gap"></div>
 
-  <!-- Session Totals -->
+  <!-- Session Totals — now includes Tracker Scripts + Links Checked -->
   <div class="section">
     <div class="section-title">Session Total</div>
     <div class="stat-row">
@@ -318,6 +316,10 @@
     <div class="stat-row">
       <span class="stat-label">⚠️ Mixed Content</span>
       <span class="stat-value danger" id="stat-total-mixed">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">🔗 Links Checked</span>
+      <span class="stat-value" id="stat-total-links">0</span>
     </div>
   </div>
 

@@ -37,84 +37,27 @@ function scanForMixedContent() {
     mixedResources.push({ type: "stylesheet", url: el.href });
   });
 
-  // Check all forms posting to HTTP from HTTPS pages
-  document.querySelectorAll("form[action^='http://']").forEach(el => {
-    mixedResources.push({ type: "form", url: el.action });
-  });
-
   if (mixedResources.length > 0) {
-    reportMixedContent(mixedResources);
+    console.log(`[ClickSafe] ⚠️ Mixed content found: ${mixedResources.length} HTTP resource(s) on HTTPS page`);
+    console.table(mixedResources);
+
+    chrome.runtime.sendMessage({
+      type: "MIXED_CONTENT_DETECTED",
+      data: {
+        pageUrl: window.location.href,
+        resources: mixedResources,
+        timestamp: new Date().toISOString()
+      }
+    });
   } else {
     console.log("[ClickSafe] ✅ No mixed content detected on this page");
   }
-}
-
-function reportMixedContent(resources) {
-  if (!Array.isArray(resources) || resources.length === 0) return;
-
-  console.log(`[ClickSafe] ⚠️ Mixed content found: ${resources.length} HTTP resource(s) on HTTPS page`);
-  console.table(resources);
-
-  chrome.runtime.sendMessage({
-    type: "MIXED_CONTENT_DETECTED",
-    data: {
-      pageUrl: window.location.href,
-      resources,
-      timestamp: new Date().toISOString()
-    }
-  });
-}
-
-function detectBlockedMixedContent() {
-  if (!window.location.href.startsWith("https://")) return;
-
-  const seen = new Set();
-
-  // Browser blocks many mixed-content requests before they appear in DOM.
-  // securitypolicyviolation captures these blocked attempts.
-  window.addEventListener("securitypolicyviolation", (event) => {
-    const blocked = event?.blockedURI || "";
-    if (!blocked.startsWith("http://")) return;
-
-    const key = `${event.violatedDirective || "mixed-content"}|${blocked}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-
-    reportMixedContent([{
-      type: "blocked",
-      url: blocked,
-      source: "securitypolicyviolation",
-      directive: event.violatedDirective || ""
-    }]);
-  }, true);
-
-  // Fallback: include any resource timing entries that still show http://.
-  // Some browsers expose attempted/loaded insecure resources here.
-  setTimeout(() => {
-    try {
-      const entries = performance.getEntriesByType("resource") || [];
-      const fromPerf = [];
-      entries.forEach((entry) => {
-        const name = entry?.name || "";
-        if (!name.startsWith("http://")) return;
-        if (seen.has(`perf|${name}`)) return;
-        seen.add(`perf|${name}`);
-        fromPerf.push({
-          type: "resource",
-          url: name,
-          source: "performance"
-        });
-      });
-      if (fromPerf.length > 0) reportMixedContent(fromPerf);
-    } catch (_) {}
-  }, 1500);
 }
 
 // Run the scan once the page is fully loaded
 // content.js runs at document_idle — DOM is ready, call directly
 // Wrap in setTimeout(0) so any synchronous page scripts finish first
 setTimeout(scanForMixedContent, 0);
-setTimeout(detectBlockedMixedContent, 0);
 
 
 // ============================================================
@@ -218,7 +161,9 @@ function handleLinkHover(url) {
       checkedUrls[url] = false;
       showWarningModal({ type: "link", url, threat: response.threat });
     } else if (response) {
-      checkedUrls[url] = true;
+      // safe: true covers both confirmed-safe AND api-unavailable (unavailable: true)
+      // We don't mark unavailable URLs as checked so they get re-tried next hover
+      if (!response.unavailable) checkedUrls[url] = true;
     }
   });
 }

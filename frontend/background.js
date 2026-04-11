@@ -655,7 +655,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         })
         .then(r => r.json())
         .then(d => sendResponse({ ...d, source: "confirmed" }))
-        .catch(() => sendResponse({ safe: false, threat: "API_UNAVAILABLE" }));
+        .catch(() => sendResponse({ safe: true, threat: "API_UNAVAILABLE", unavailable: true }));
       } else {
         fetch(`${BACKEND_URL}/api/check-link`, {
           method:  "POST",
@@ -664,7 +664,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         })
         .then(r => r.json())
         .then(d => sendResponse({ ...d, source: "backend" }))
-        .catch(() => sendResponse({ safe: false, threat: "API_UNAVAILABLE" }));
+        .catch(() => sendResponse({ safe: true, threat: "API_UNAVAILABLE", unavailable: true }));
       }
     });
     return true;

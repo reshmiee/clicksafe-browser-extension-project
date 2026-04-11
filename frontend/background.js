@@ -432,6 +432,53 @@ async function loadSbPrefixesFromStorage() {
 }
 
 
+
+
+// ============================================================
+//  PANEL UPDATE — builds stats payload and pushes to side panel
+//  Called whenever something changes that the panel should show.
+// ============================================================
+
+async function buildPanelPayload(tabId, tabUrl) {
+  const isHttps = (tabUrl || "").startsWith("https://");
+
+  const keys = [
+    "totalTrackersFound",
+    "totalMixedContent",
+    "totalCookieTrackersFound",
+    `trackerData_${tabId}`,
+    `mixedContent_${tabId}`,
+    `cookieData_${tabId}`,
+    `privacyScore_${tabId}`,
+    `linksChecked_${tabId}`
+  ];
+
+  const result = await chrome.storage.local.get(keys);
+
+  return {
+    url:             tabUrl || "",
+    isHttps,
+    score:           result[`privacyScore_${tabId}`],
+    pageTrackerCount: result[`trackerData_${tabId}`]?.count || 0,
+    pageMixedCount:   result[`mixedContent_${tabId}`]?.count || 0,
+    cookieData:       result[`cookieData_${tabId}`] || {},
+    linksChecked:     result[`linksChecked_${tabId}`] || 0,
+    totalTrackersFound:       result.totalTrackersFound       || 0,
+    totalMixedContent:        result.totalMixedContent        || 0,
+    totalCookieTrackersFound: result.totalCookieTrackersFound || 0
+  };
+}
+
+// Push stats to the side panel (fire-and-forget — panel may not be open)
+async function pushPanelUpdate(tabId, tabUrl) {
+  try {
+    const payload = await buildPanelPayload(tabId, tabUrl);
+    chrome.runtime.sendMessage({ type: "PANEL_UPDATE", payload }).catch(() => {});
+  } catch (e) {
+    // Panel not open — silently ignore
+  }
+}
+
 // ============================================================
 //  STARTUP
 // ============================================================
@@ -491,11 +538,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           totalCookieTrackersFound: (prev.totalCookieTrackersFound || 0) + cookieData.trackingCookies
         });
         updateThreatBadge(tabId);
+        pushPanelUpdate(tabId, tab.url);
       }
     } catch (err) {
       console.error('[ClickSafe Cookie]', err);
     }
   }
+
+  // Push panel update when tab finishes loading (handles tab switch + navigation)
+  pushPanelUpdate(tabId, tab.url);
 });
 
 
@@ -510,6 +561,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
+  // Side panel asks for current tab stats on open
+  if (message.type === "GET_CURRENT_TAB_STATS") {
+    chrome.tabs.query({ active: true, currentWindow: true }, async tabs => {
+      if (!tabs[0]) { sendResponse(null); return; }
+      const payload = await buildPanelPayload(tabs[0].id, tabs[0].url);
+      sendResponse(payload);
+    });
+    return true; // async sendResponse
+  }
+
   // Mixed content — written by content.js DOM scan (Feature 2)
   // FIX: stores to mixedContent_${tabId} which badge + sidebar both read
   if (message.type === "MIXED_CONTENT_DETECTED") {
@@ -519,7 +580,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.storage.local.set({
         totalMixedContent:         (result.totalMixedContent || 0) + message.data.resources.length,
         [`mixedContent_${tabId}`]: { count: message.data.resources.length, resources: message.data.resources }
-      }, () => { if (tabId) updateThreatBadge(tabId); });
+      }, () => {
+        if (tabId) {
+          updateThreatBadge(tabId);
+          chrome.storage.local.get([`tabUrl_${tabId}`], r => pushPanelUpdate(tabId, r[`tabUrl_${tabId}`] || ""));
+        }
+      });
     });
     return;
   }
@@ -538,7 +604,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         totalTrackersFound:          (result.totalTrackersFound || 0) + message.data.trackers.length,
         tabTrackers,
         [`trackerData_${tabId}`]:    { count: message.data.trackers.length }
-      }, () => { if (tabId) updateThreatBadge(tabId); });
+      }, () => {
+        if (tabId) {
+          updateThreatBadge(tabId);
+          chrome.storage.local.get([`tabUrl_${tabId}`], r => pushPanelUpdate(tabId, r[`tabUrl_${tabId}`] || ""));
+        }
+      });
     });
     return;
   }
@@ -650,6 +721,13 @@ chrome.downloads.onCreated.addListener(async downloadItem => {
   }
 });
 
+
+// Push panel update when user switches to a different tab
+chrome.tabs.onActivated.addListener(info => {
+  chrome.tabs.get(info.tabId, tab => {
+    if (tab?.url) pushPanelUpdate(tab.id, tab.url);
+  });
+});
 
 // Clean up per-tab data on tab close
 chrome.tabs.onRemoved.addListener(tabId => {

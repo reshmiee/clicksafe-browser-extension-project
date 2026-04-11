@@ -1,58 +1,92 @@
 // ============================================================
 //  ClickSafe — sidepanel.js
-//  Runs inside the Chrome Side Panel.
-//  Replaces the old sidebar.js popup approach.
 //
-//  Key difference from the old popup:
-//  The side panel stays open across navigations, so we need to
-//  listen for tab updates and reload stats automatically
-//  instead of only loading once on open.
+//  ARCHITECTURE:
+//  The side panel NEVER queries tabs or listens to tab events
+//  directly — those APIs are unreliable inside a panel page.
+//
+//  Instead:
+//  - background.js owns all tab watching (onActivated, onUpdated)
+//  - When a tab changes or finishes loading, background.js sends
+//    a PANEL_UPDATE message with the full stats payload
+//  - sidepanel.js only listens for that message and renders
+//  - On first open, sidepanel.js asks background.js for the
+//    current tab's stats via GET_CURRENT_TAB_STATS
 // ============================================================
 
-const CIRCUMFERENCE = 201.1; // 2π × 32 (matches SVG r="32" in sidepanel.html)
+const CIRCUMFERENCE = 201.1; // 2π × 32
 
-// ── Initial load ─────────────────────────────────────────────
-chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-  if (tabs[0]) loadForTab(tabs[0]);
+// ── On open: ask background for current tab stats immediately ─
+chrome.runtime.sendMessage({ type: "GET_CURRENT_TAB_STATS" }, response => {
+  if (chrome.runtime.lastError) return; // background may not be ready yet
+  if (response) render(response);
 });
 
-// ── Re-load whenever the active tab changes or navigates ─────
-chrome.tabs.onActivated.addListener(info => {
-  chrome.tabs.get(info.tabId, tab => {
-    if (tab) loadForTab(tab);
-  });
-});
-
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status !== "complete") return;
-  // Only update if this is still the active tab
-  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-    if (tabs[0]?.id === tabId) loadForTab(tab);
-  });
+// ── Listen for push updates from background.js ───────────────
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === "PANEL_UPDATE") {
+    render(message.payload);
+  }
 });
 
 
-// ── Main load function ───────────────────────────────────────
-function loadForTab(tab) {
-  const url     = tab.url || "";
-  const isHttps = url.startsWith("https://");
-  const tabId   = tab.id;
+// ── Render all stats from a payload object ───────────────────
+function render(payload) {
+  if (!payload) return;
 
-  // Page URL + HTTPS badge
-  const urlEl = document.getElementById("page-url");
-  if (urlEl) urlEl.textContent = url || "—";
+  const {
+    url = "",
+    isHttps = false,
+    score,
+    pageTrackerCount = 0,
+    pageMixedCount   = 0,
+    cookieData       = {},
+    linksChecked     = 0,
+    totalTrackersFound       = 0,
+    totalMixedContent        = 0,
+    totalCookieTrackersFound = 0
+  } = payload;
 
+  // URL + HTTPS badge
+  setText("page-url", url || "—");
   const badge = document.getElementById("page-badge");
   if (badge) {
     badge.textContent = isHttps ? "Secure (HTTPS)" : "Not Secure (HTTP)";
     badge.className   = "badge " + (isHttps ? "secure" : "insecure");
   }
 
-  loadStats(tabId, isHttps);
+  // This page stats
+  setText("stat-trackers",         pageTrackerCount);
+  setText("stat-mixed",            pageMixedCount);
+  setText("stat-total-cookies",    cookieData.totalCookies    || 0);
+  setText("stat-cookie-trackers",  cookieData.trackingCookies || 0);
+  setText("stat-links",            linksChecked);
+
+  // Cookie tracker details
+  if (cookieData.trackers?.length > 0) {
+    displayCookieTrackers(cookieData.trackers);
+  } else {
+    const section = document.getElementById("cookie-details-section");
+    if (section) section.style.display = "none";
+  }
+
+  // Privacy score gauge
+  const finalScore = (score !== undefined) ? score : computePrivacyScore({
+    isHttps,
+    trackingCookies: cookieData.trackingCookies || 0,
+    trackers:        pageTrackerCount,
+    mixedContent:    pageMixedCount
+  });
+  renderGauge(finalScore);
+
+  // Session totals
+  setText("stat-total-trackers",        totalTrackersFound);
+  setText("stat-total-mixed",           totalMixedContent);
+  setText("stat-total-cookie-trackers", totalCookieTrackersFound);
 }
 
 
-// ── Privacy score formula — keep in sync with background.js ──
+// ── Privacy score formula (keep in sync with background.js) ──
 function computePrivacyScore({ isHttps, trackingCookies, trackers, mixedContent }) {
   let score = 100;
   if (!isHttps)      score -= 30;
@@ -88,74 +122,18 @@ function renderGauge(score) {
   desc.textContent    = description;
 }
 
-
-// ── Load and render all stats for the given tab ──────────────
-function loadStats(tabId, isHttps) {
-  const keys = [
-    "totalTrackersFound",
-    "totalMixedContent",
-    "totalCookieTrackersFound",
-    `trackerData_${tabId}`,
-    `mixedContent_${tabId}`,
-    `cookieData_${tabId}`,
-    `privacyScore_${tabId}`,
-    `linksChecked_${tabId}`
-  ];
-
-  chrome.storage.local.get(keys, result => {
-    const pageTrackerCount = result[`trackerData_${tabId}`]?.count           || 0;
-    const pageMixedCount   = result[`mixedContent_${tabId}`]?.count          || 0;
-    const cookieData       = result[`cookieData_${tabId}`]                   || {};
-    const linksChecked     = result[`linksChecked_${tabId}`]                 || 0;
-
-    // This page stats
-    setText("stat-trackers",        pageTrackerCount);
-    setText("stat-mixed",           pageMixedCount);
-    setText("stat-total-cookies",   cookieData.totalCookies    || 0);
-    setText("stat-cookie-trackers", cookieData.trackingCookies || 0);
-    setText("stat-links",           linksChecked);
-
-    // Cookie tracker details
-    if (cookieData.trackers?.length > 0) {
-      displayCookieTrackers(cookieData.trackers);
-    } else {
-      const section = document.getElementById("cookie-details-section");
-      if (section) section.style.display = "none";
-    }
-
-    // Privacy score — use background-stored value first, else compute locally
-    const storedScore = result[`privacyScore_${tabId}`];
-    const score = (storedScore !== undefined)
-      ? storedScore
-      : computePrivacyScore({
-          isHttps:         isHttps ?? document.getElementById("page-url")?.textContent?.startsWith("https://"),
-          trackingCookies: cookieData.trackingCookies || 0,
-          trackers:        pageTrackerCount,
-          mixedContent:    pageMixedCount
-        });
-
-    renderGauge(score);
-
-    // Session totals
-    setText("stat-total-trackers",       result.totalTrackersFound       || 0);
-    setText("stat-total-mixed",          result.totalMixedContent         || 0);
-    setText("stat-total-cookie-trackers", result.totalCookieTrackersFound || 0);
-  });
-}
-
 function setText(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
 }
 
 function displayCookieTrackers(trackers) {
-  const section  = document.getElementById("cookie-details-section");
+  const section    = document.getElementById("cookie-details-section");
   const cookieList = document.getElementById("cookie-list");
   if (!section || !cookieList) return;
 
   section.style.display = "block";
-
-  cookieList.innerHTML = trackers.map(tracker => {
+  cookieList.innerHTML  = trackers.map(tracker => {
     const cookie  = tracker.cookie;
     const reasons = tracker.reasons || [];
     return `
@@ -169,17 +147,7 @@ function displayCookieTrackers(trackers) {
   }).join("");
 }
 
-
-// ── Settings button ──────────────────────────────────────────
+// Settings button
 document.getElementById("settings-btn")?.addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("pages/settings/settings.html") });
 });
-
-
-// ── Re-poll after 2s to catch async background writes ────────
-// (cookie scan and tracker scan run async after page load)
-setTimeout(() => {
-  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-    if (tabs[0]) loadForTab(tabs[0]);
-  });
-}, 2000);

@@ -4,7 +4,7 @@
 //                  Top Domains, Feature Status, Dark Pattern Log
 // ============================================================
 
-const CIRCUMFERENCE = 314.16; // 2π × 50
+const CIRCUMFERENCE = 282.74; // 2π × 45
 
 let donutChart    = null;
 let timelineChart = null;
@@ -62,7 +62,7 @@ function renderOverview(data) {
 
 function computeScore({ cookieTrackers, trackerScripts, mixedContent }) {
   let s = 100;
-  s -= Math.min(cookieTrackers * 2, 30);
+  s -= Math.min(cookieTrackers * 5, 30);
   s -= Math.min(trackerScripts * 4, 20);
   s -= Math.min(mixedContent   * 5, 20);
   return Math.max(0, Math.min(100, Math.round(s)));
@@ -77,11 +77,11 @@ function renderGauge(score) {
 
   let color, lbl, desc;
   if (score >= 80) {
-    color = '#22c55e'; lbl = 'Safe';          desc = 'Your browsing looks clean!';
+    color = '#16a34a'; lbl = 'Safe';          desc = 'Your browsing looks clean!';
   } else if (score >= 50) {
-    color = '#eab308'; lbl = 'Moderate Risk'; desc = 'Some trackers detected.';
+    color = '#d97706'; lbl = 'Moderate Risk'; desc = 'Some trackers detected.';
   } else {
-    color = '#ef4444'; lbl = 'High Risk';     desc = 'Significant threats found.';
+    color = '#dc2626'; lbl = 'High Risk';     desc = 'Significant threats found.';
   }
 
   arc.style.strokeDashoffset = CIRCUMFERENCE * (1 - score / 100);
@@ -156,7 +156,8 @@ function renderHeatmap(data) {
 
     const intensity = day.count / max;
     if (day.count === 0) {
-      cell.style.background = 'var(--surface2)';
+      cell.style.background = '#f3f4f6';
+      cell.style.border = '1px solid #e5e7eb';
     } else if (intensity < 0.25) {
       cell.style.background = 'rgba(239,68,68,0.2)';
     } else if (intensity < 0.5) {
@@ -169,7 +170,7 @@ function renderHeatmap(data) {
 
     const tip = document.createElement('div');
     tip.className = 'tooltip';
-    tip.textContent = `${day.label} — ${day.count} threats`;
+    tip.textContent = `${day.label} — ${day.count} threat${day.count !== 1 ? 's' : ''}`;
     cell.appendChild(tip);
     grid.appendChild(cell);
   });
@@ -189,7 +190,7 @@ function renderDonut(data) {
 
   const labels = ['Cookie Trackers', 'Tracker Scripts', 'Mixed Content', 'Dark Patterns', 'Links Blocked'];
   const values = [cookieTrackers, trackerScripts, mixedContent, darkPatterns, linksBlocked];
-  const colors = ['#ef4444', '#f97316', '#06b6d4', '#a855f7', '#ec4899'];
+  const colors = ['#dc2626', '#ea580c', '#0891b2', '#7c3aed', '#ec4899'];
 
   const ctx = document.getElementById('donut-chart').getContext('2d');
 
@@ -221,7 +222,7 @@ function renderDonut(data) {
   // Legend
   const legend = document.getElementById('donut-legend');
   legend.innerHTML = labels.map((l, i) => `
-    <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text);">
+    <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:#374151;">
       <div style="width:8px;height:8px;border-radius:2px;background:${colors[i]};flex-shrink:0;"></div>
       ${l}
     </div>
@@ -272,11 +273,11 @@ function renderTimeline(data) {
       datasets: [{
         label: 'Threats',
         data: buckets,
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59,130,246,0.08)',
+        borderColor: '#1e40af',
+        backgroundColor: 'rgba(30,64,175,0.07)',
         borderWidth: 2,
         pointRadius: 3,
-        pointBackgroundColor: '#3b82f6',
+        pointBackgroundColor: '#1e40af',
         fill: true,
         tension: 0.4
       }]
@@ -287,12 +288,12 @@ function renderTimeline(data) {
       plugins: { legend: { display: false } },
       scales: {
         x: {
-          ticks: { color: '#64748b', font: { size: 9 }, maxTicksLimit: 8 },
-          grid: { color: 'rgba(255,255,255,0.04)' }
+          ticks: { color: '#9ca3af', font: { size: 9 }, maxTicksLimit: 8 },
+          grid: { color: 'rgba(0,0,0,0.06)' }
         },
         y: {
-          ticks: { color: '#64748b', font: { size: 9 } },
-          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#9ca3af', font: { size: 9 } },
+          grid: { color: 'rgba(0,0,0,0.06)' },
           beginAtZero: true
         }
       }
@@ -306,7 +307,7 @@ function renderTopDomains(data) {
   const container = document.getElementById('domain-list');
   const domainCounts = {};
 
-  // Count from tracker log
+  // Count from tracker log (script trackers)
   (data.trackerLog || []).forEach(entry => {
     (entry.trackers || []).forEach(t => {
       const domain = t.tracker || t.domain || 'unknown';
@@ -314,8 +315,16 @@ function renderTopDomains(data) {
     });
   });
 
-  // Count from cookie trackers
-  (data.trackerBlocklist ? [] : []).forEach(() => {}); // blocklist not counted
+  // Count from cookie tracker data (per-tab cookie trackers)
+  Object.keys(data).forEach(key => {
+    if (key.startsWith('cookieData_')) {
+      const cookieData = data[key];
+      (cookieData.trackers || []).forEach(t => {
+        const domain = (t.cookie?.domain || '').replace(/^\./, '');
+        if (domain) domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+      });
+    }
+  });
 
   const sorted = Object.entries(domainCounts)
     .sort((a, b) => b[1] - a[1])
@@ -351,10 +360,11 @@ function renderFeatureStatus(data) {
 
   const isOn = key => settings[key] !== false;
 
-  setStatusDot('fs-https',  isOn('httpsEnabled'));
-  setStatusDot('fs-cookies', isOn('cookiesEnabled'));
-  setStatusDot('fs-links',   isOn('linksEnabled'));
-  setStatusDot('fs-downloads', isOn('downloadsEnabled'));
+  setStatusDot('fs-https',        isOn('httpsEnabled'));
+  setStatusDot('fs-cookies',      isOn('cookiesEnabled'));
+  setStatusDot('fs-links',        isOn('linksEnabled'));
+  setStatusDot('fs-downloads',    isOn('downloadsEnabled'));
+  setStatusDot('fs-darkpatterns', isOn('darkPatternsEnabled'));
 
   setText('fs-https-count',     (data.totalHttpsRedirects   || 0) + ' redirects');
   setText('fs-cookies-count',   (data.totalCookieTrackersFound || 0) + ' caught');
@@ -413,9 +423,9 @@ function renderDpTable() {
 
     return `<tr>
       <td><span class="pattern-tag ${tag.cls}">${row.type || 'Unknown'}</span></td>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--muted);">${site}</td>
-      <td style="color:var(--muted);font-size:11px;">${text}${row.text?.length > 60 ? '…' : ''}</td>
-      <td style="font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;">${time}</td>
+      <td style="font-family:'Courier New',monospace;font-size:11px;color:#6b7280;">${site}</td>
+      <td style="color:#6b7280;font-size:11px;">${text}${row.text?.length > 60 ? '…' : ''}</td>
+      <td style="font-family:'Courier New',monospace;font-size:10px;color:#9ca3af;white-space:nowrap;">${time}</td>
     </tr>`;
   }).join('');
 }

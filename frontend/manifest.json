@@ -45,7 +45,8 @@
     "scripting",
     "sidePanel",
     "declarativeNetRequest",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "webNavigation"
   ],
   "declarative_net_request": {
     "rule_resources": [

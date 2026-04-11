@@ -458,6 +458,25 @@ loadTrackerBlocklist();
 loadSbPrefixesFromStorage();
 setInterval(updateSbPrefixes, SB_REFRESH_MS);
 
+// Count HTTPS redirects (when we redirect http→https via rules.json the
+// navigation URL will start with https:// but the initiating URL was http://).
+// We detect this by watching for completed navigations to https:// where the
+// referrer policy suggests a redirect occurred (transition type "server_redirect").
+if (chrome.webNavigation) {
+  chrome.webNavigation.onCommitted.addListener(details => {
+    if (
+      details.frameId === 0 &&
+      details.url.startsWith("https://") &&
+      details.transitionQualifiers &&
+      details.transitionQualifiers.includes("server_redirect")
+    ) {
+      chrome.storage.local.get(['totalHttpsRedirects'], r => {
+        chrome.storage.local.set({ totalHttpsRedirects: (r.totalHttpsRedirects || 0) + 1 });
+      });
+    }
+  });
+}
+
 
 // ============================================================
 //  TAB LOAD — icon + cookie scan
@@ -536,9 +555,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "MIXED_CONTENT_DETECTED") {
     if (!currentSettings.httpsEnabled) return;
     const tabId = sender.tab?.id;
-    chrome.storage.local.get(["totalMixedContent"], result => {
+    chrome.storage.local.get(["totalMixedContent", "mixedContentLog"], result => {
+      const log = result.mixedContentLog || [];
+      log.push(message.data);
       chrome.storage.local.set({
         totalMixedContent:         (result.totalMixedContent || 0) + message.data.resources.length,
+        mixedContentLog:           log,
         [`mixedContent_${tabId}`]: { count: message.data.resources.length, resources: message.data.resources }
       }, () => {
         if (tabId) {
@@ -619,7 +641,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           body:    JSON.stringify({ url: message.url, hash: localResult.hash, threatType: localResult.threatType })
         })
         .then(r => r.json())
-        .then(d => sendResponse({ ...d, source: "confirmed" }))
+        .then(d => {
+          if (d && !d.safe) {
+            chrome.storage.local.get(['totalThreatsBlocked'], r => {
+              chrome.storage.local.set({ totalThreatsBlocked: (r.totalThreatsBlocked || 0) + 1 });
+            });
+          }
+          sendResponse({ ...d, source: "confirmed" });
+        })
         .catch(() => sendResponse({ safe: true, threat: "API_UNAVAILABLE", unavailable: true }));
       } else {
         fetch(`${BACKEND_URL}/api/check-link`, {
@@ -669,19 +698,30 @@ chrome.downloads.onCreated.addListener(async downloadItem => {
     });
     const data = await res.json();
 
+    // Count every download scanned
+    chrome.storage.local.get(['totalDownloadsScanned'], r => {
+      chrome.storage.local.set({ totalDownloadsScanned: (r.totalDownloadsScanned || 0) + 1 });
+    });
+
     if (data.safe) {
       chrome.downloads.resume(id);
     } else {
       chrome.downloads.cancel(id);
-      chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
-        if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, {
-          type: "SHOW_DOWNLOAD_WARNING", url, filename, threat: data.threat
-        });
+      // Count blocked threats
+      chrome.storage.local.get(['totalThreatsBlocked'], r => {
+        chrome.storage.local.set({ totalThreatsBlocked: (r.totalThreatsBlocked || 0) + 1 });
       });
+      if (currentSettings.modalsEnabled !== false) {
+        chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+          if (tabs[0]) chrome.tabs.sendMessage(tabs[0].id, {
+            type: "SHOW_DOWNLOAD_WARNING", url, filename, threat: data.threat
+          });
+        });
+      }
     }
   } catch (err) {
-    console.error("[ClickSafe Download] check failed, cancelling:", err.message);
-    chrome.downloads.cancel(id);
+    console.error("[ClickSafe Download] check failed, resuming to avoid blocking all downloads:", err.message);
+    chrome.downloads.resume(id);
   }
 });
 

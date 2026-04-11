@@ -4,242 +4,141 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ClickSafe Dashboard</title>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <style>
-    :root {
-      --bg:       #07090f;
-      --surface:  #0d1117;
-      --surface2: #161b22;
-      --border:   rgba(255,255,255,0.06);
-      --blue:     #3b82f6;
-      --cyan:     #06b6d4;
-      --red:      #ef4444;
-      --orange:   #f97316;
-      --green:    #22c55e;
-      --yellow:   #eab308;
-      --purple:   #a855f7;
-      --pink:     #ec4899;
-      --text:     #e2e8f0;
-      --muted:    #64748b;
-      --mono:     'DM Mono', monospace;
-    }
-
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'DM Sans', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: #f3f4f6;
+      color: #111827;
       min-height: 100vh;
-      overflow-x: hidden;
     }
 
-    /* ── Noise grain overlay ── */
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 0;
-    }
-
-    /* ── Header ── */
     header {
-      position: sticky;
-      top: 0;
-      z-index: 100;
-      background: rgba(7,9,15,0.85);
-      backdrop-filter: blur(20px);
-      border-bottom: 1px solid var(--border);
+      background: #1e40af;
+      color: white;
       padding: 0 32px;
-      height: 60px;
+      height: 56px;
       display: flex;
       align-items: center;
       justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
     .logo {
-      font-family: 'Syne', sans-serif;
-      font-weight: 800;
-      font-size: 18px;
+      font-size: 17px;
+      font-weight: 700;
       display: flex;
       align-items: center;
-      gap: 10px;
-      color: var(--text);
+      gap: 8px;
     }
 
-    .logo-badge {
-      background: linear-gradient(135deg, var(--blue), var(--cyan));
-      width: 28px; height: 28px;
-      border-radius: 7px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 14px;
-    }
+    .header-right { display: flex; align-items: center; gap: 12px; }
 
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
+    .last-updated { font-size: 11px; opacity: 0.7; }
 
     .btn-clear {
-      background: rgba(239,68,68,0.1);
-      border: 1px solid rgba(239,68,68,0.2);
-      color: var(--red);
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: white;
       padding: 6px 14px;
       border-radius: 7px;
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
-      font-family: 'DM Sans', sans-serif;
-      transition: all 0.2s;
+      font-family: inherit;
+      transition: background 0.2s;
     }
-    .btn-clear:hover { background: rgba(239,68,68,0.2); }
+    .btn-clear:hover { background: rgba(255,255,255,0.25); }
 
-    .last-updated {
-      font-size: 11px;
-      color: var(--muted);
-      font-family: var(--mono);
-    }
-
-    /* ── Main layout ── */
     main {
-      max-width: 1400px;
+      max-width: 1300px;
       margin: 0 auto;
       padding: 28px 32px 60px;
-      position: relative;
-      z-index: 1;
     }
 
-    /* ── Section title ── */
     .section-header {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       gap: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 14px;
+      margin-top: 28px;
     }
 
     .section-title {
-      font-family: 'Syne', sans-serif;
-      font-size: 13px;
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--muted);
+      color: #6b7280;
+      white-space: nowrap;
     }
 
-    .section-line {
-      flex: 1;
-      height: 1px;
-      background: var(--border);
-    }
+    .section-line { flex: 1; height: 1px; background: #e5e7eb; }
 
-    /* ── Cards ── */
     .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
       padding: 20px 22px;
-      position: relative;
-      overflow: hidden;
-      transition: border-color 0.2s;
     }
-
-    .card:hover { border-color: rgba(255,255,255,0.1); }
 
     .card-label {
       font-size: 11px;
-      color: var(--muted);
-      font-weight: 500;
-      letter-spacing: 0.05em;
+      color: #6b7280;
+      font-weight: 600;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
       margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
     }
 
     .card-value {
-      font-family: 'Syne', sans-serif;
-      font-size: 36px;
-      font-weight: 800;
+      font-size: 32px;
+      font-weight: 700;
       line-height: 1;
       margin-bottom: 4px;
     }
 
-    .card-sub {
-      font-size: 11px;
-      color: var(--muted);
-    }
+    .card-sub { font-size: 11px; color: #9ca3af; }
 
-    .card-glow {
-      position: absolute;
-      top: -40px; right: -40px;
-      width: 120px; height: 120px;
-      border-radius: 50%;
-      opacity: 0.08;
-      pointer-events: none;
-    }
-
-    /* ── Grids ── */
     .grid-5 {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
       gap: 14px;
-      margin-bottom: 28px;
+      margin-bottom: 14px;
     }
 
     .grid-2 {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
-      margin-bottom: 28px;
     }
 
-    .grid-3 {
-      display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap: 20px;
-      margin-bottom: 28px;
-    }
-
-    .grid-12 {
-      display: grid;
-      grid-template-columns: 1fr 2fr;
-      gap: 20px;
-      margin-bottom: 28px;
-    }
-
-    /* ── Privacy Score Hero ── */
-    .score-hero {
-      display: flex;
-      align-items: center;
-      gap: 24px;
-    }
+    /* Privacy Score gauge */
+    .score-hero { display: flex; align-items: center; gap: 20px; }
 
     .gauge-wrap {
       position: relative;
-      width: 120px;
-      height: 120px;
+      width: 110px;
+      height: 110px;
       flex-shrink: 0;
     }
 
     .gauge-wrap svg {
-      width: 120px;
-      height: 120px;
+      width: 110px;
+      height: 110px;
       transform: rotate(-90deg);
     }
 
-    .gauge-bg-circle  { fill: none; stroke: var(--surface2); stroke-width: 10; }
+    .gauge-bg-circle  { fill: none; stroke: #e5e7eb; stroke-width: 10; }
     .gauge-arc-circle {
       fill: none;
       stroke-width: 10;
       stroke-linecap: round;
-      transition: stroke-dashoffset 1s cubic-bezier(0.4,0,0.2,1), stroke 0.4s;
+      transition: stroke-dashoffset 1s ease, stroke 0.4s;
     }
 
     .gauge-center {
@@ -251,74 +150,37 @@
       justify-content: center;
     }
 
-    .gauge-num {
-      font-family: 'Syne', sans-serif;
-      font-size: 28px;
-      font-weight: 800;
-      line-height: 1;
-    }
+    .gauge-num { font-size: 24px; font-weight: 700; line-height: 1; }
+    .gauge-denom { font-size: 10px; color: #9ca3af; margin-top: 2px; }
 
-    .gauge-denom {
-      font-size: 10px;
-      color: var(--muted);
-      margin-top: 2px;
-    }
-
-    .score-info h2 {
-      font-family: 'Syne', sans-serif;
-      font-size: 22px;
-      font-weight: 800;
-      margin-bottom: 6px;
-    }
-
-    .score-verdict {
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: 10px;
-    }
+    .score-info h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; color: #111827; }
+    .score-verdict { font-size: 13px; color: #6b7280; margin-bottom: 10px; }
 
     .score-bar {
-      height: 4px;
-      background: var(--surface2);
-      border-radius: 2px;
-      width: 200px;
+      height: 5px;
+      background: #e5e7eb;
+      border-radius: 3px;
+      width: 180px;
       overflow: hidden;
     }
 
-    .score-bar-fill {
-      height: 100%;
-      border-radius: 2px;
-      transition: width 1s ease;
-    }
+    .score-bar-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
 
-    /* ── Heatmap ── */
-    .heatmap-grid {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 4px;
-    }
+    /* Heatmap */
+    .heatmap-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
 
-    .heatmap-day-label {
-      font-size: 10px;
-      color: var(--muted);
-      font-family: var(--mono);
-      text-align: center;
-      padding-bottom: 6px;
-    }
+    .heatmap-day-label { font-size: 10px; color: #9ca3af; text-align: center; padding-bottom: 5px; }
 
     .heatmap-cell {
       aspect-ratio: 1;
       border-radius: 4px;
-      background: var(--surface2);
+      background: #f3f4f6;
       cursor: pointer;
       transition: transform 0.15s;
       position: relative;
     }
 
-    .heatmap-cell:hover {
-      transform: scale(1.2);
-      z-index: 2;
-    }
+    .heatmap-cell:hover { transform: scale(1.15); z-index: 2; }
 
     .heatmap-cell .tooltip {
       position: absolute;
@@ -326,8 +188,7 @@
       left: 50%;
       transform: translateX(-50%);
       background: #1e293b;
-      border: 1px solid var(--border);
-      color: var(--text);
+      color: white;
       font-size: 11px;
       padding: 4px 8px;
       border-radius: 5px;
@@ -336,177 +197,102 @@
       opacity: 0;
       transition: opacity 0.15s;
       z-index: 10;
-      font-family: var(--mono);
     }
 
     .heatmap-cell:hover .tooltip { opacity: 1; }
 
-    .heatmap-legend {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      margin-top: 12px;
-      justify-content: flex-end;
-    }
+    .heatmap-legend { display: flex; align-items: center; gap: 6px; margin-top: 12px; justify-content: flex-end; }
+    .heatmap-legend span { font-size: 10px; color: #9ca3af; }
+    .heatmap-legend-cells { display: flex; gap: 3px; }
+    .heatmap-legend-cell { width: 12px; height: 12px; border-radius: 2px; }
 
-    .heatmap-legend span {
-      font-size: 10px;
-      color: var(--muted);
-    }
+    /* Chart */
+    .chart-wrap { position: relative; width: 100%; height: 210px; }
 
-    .heatmap-legend-cells {
-      display: flex;
-      gap: 3px;
-    }
+    /* Domain bars */
+    .domain-list { display: flex; flex-direction: column; gap: 10px; }
 
-    .heatmap-legend-cell {
-      width: 12px;
-      height: 12px;
-      border-radius: 2px;
-    }
-
-    /* ── Timeline ── */
-    .chart-wrap {
-      position: relative;
-      width: 100%;
-      height: 220px;
-    }
-
-    /* ── Domain bar chart ── */
-    .domain-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .domain-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+    .domain-row { display: flex; align-items: center; gap: 10px; }
 
     .domain-name {
-      font-family: var(--mono);
+      font-family: 'Courier New', monospace;
       font-size: 11px;
-      color: var(--text);
-      width: 160px;
+      color: #374151;
+      width: 150px;
       flex-shrink: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .domain-bar-wrap {
-      flex: 1;
-      height: 6px;
-      background: var(--surface2);
-      border-radius: 3px;
-      overflow: hidden;
-    }
+    .domain-bar-wrap { flex: 1; height: 6px; background: #f3f4f6; border-radius: 3px; overflow: hidden; }
+    .domain-bar-fill { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+    .domain-count { font-family: 'Courier New', monospace; font-size: 11px; color: #9ca3af; width: 28px; text-align: right; flex-shrink: 0; }
 
-    .domain-bar-fill {
-      height: 100%;
-      border-radius: 3px;
-      transition: width 0.8s ease;
-    }
-
-    .domain-count {
-      font-family: var(--mono);
-      font-size: 11px;
-      color: var(--muted);
-      width: 28px;
-      text-align: right;
-      flex-shrink: 0;
-    }
-
-    /* ── Dark pattern log ── */
-    .log-table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+    /* Dark pattern log */
+    .log-table { width: 100%; border-collapse: collapse; }
 
     .log-table th {
       font-size: 10px;
-      color: var(--muted);
+      color: #9ca3af;
       text-transform: uppercase;
       letter-spacing: 0.08em;
       font-weight: 600;
       padding: 0 12px 10px;
       text-align: left;
-      border-bottom: 1px solid var(--border);
+      border-bottom: 1px solid #e5e7eb;
     }
 
-    .log-table td {
-      padding: 10px 12px;
-      font-size: 12px;
-      border-bottom: 1px solid var(--border);
-      color: var(--text);
-    }
-
+    .log-table td { padding: 10px 12px; font-size: 12px; border-bottom: 1px solid #f3f4f6; color: #374151; }
     .log-table tr:last-child td { border-bottom: none; }
+    .log-table tr:hover td { background: #f9fafb; }
 
-    .log-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .pattern-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+    .tag-urgency   { background: #fff7ed; color: #c2410c; }
+    .tag-shaming   { background: #fdf2f8; color: #9d174d; }
+    .tag-countdown { background: #fef2f2; color: #b91c1c; }
+    .tag-checkbox  { background: #f5f3ff; color: #6d28d9; }
+    .tag-cookie    { background: #ecfeff; color: #0e7490; }
+    .tag-unknown   { background: #f9fafb; color: #6b7280; }
 
-    .pattern-tag {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 600;
-    }
+    .empty-state { text-align: center; padding: 36px; color: #9ca3af; font-size: 13px; }
+    .empty-icon  { font-size: 28px; margin-bottom: 8px; }
 
-    .tag-urgency     { background: rgba(249,115,22,0.15); color: #f97316; }
-    .tag-shaming     { background: rgba(236,72,153,0.15); color: #ec4899; }
-    .tag-countdown   { background: rgba(239,68,68,0.15);  color: #ef4444; }
-    .tag-checkbox    { background: rgba(168,85,247,0.15); color: #a855f7; }
-    .tag-cookie      { background: rgba(6,182,212,0.15);  color: #06b6d4; }
-    .tag-unknown     { background: rgba(100,116,139,0.15);color: #64748b; }
-
-    .empty-state {
-      text-align: center;
-      padding: 40px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .empty-icon { font-size: 32px; margin-bottom: 8px; }
-
-    /* ── Feature status cards ── */
-    .feature-status {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--border);
-    }
-
+    /* Feature status */
+    .feature-status { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
     .feature-status:last-child { border-bottom: none; }
 
-    .status-dot {
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      flex-shrink: 0;
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .status-dot.on  { background: #16a34a; }
+    .status-dot.off { background: #d1d5db; }
+
+    .status-name  { font-size: 13px; color: #374151; flex: 1; }
+    .status-count { font-size: 12px; color: #9ca3af; }
+
+    /* DP filters */
+    .dp-filter {
+      background: #f3f4f6;
+      border: 1px solid #e5e7eb;
+      color: #6b7280;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.15s;
     }
+    .dp-filter:hover { color: #111827; background: #e5e7eb; }
+    .dp-filter.active { background: #1e40af; border-color: #1e40af; color: white; }
 
-    .status-dot.on  { background: var(--green); box-shadow: 0 0 6px var(--green); }
-    .status-dot.off { background: var(--muted); }
-
-    .status-name { font-size: 13px; flex: 1; }
-    .status-count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-
-    /* ── Scrollbar ── */
-    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar { width: 5px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--surface2); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
   </style>
 </head>
 <body>
 
   <header>
-    <div class="logo">
-      <div class="logo-badge">🛡️</div>
-      ClickSafe — Dashboard
-    </div>
+    <div class="logo">🛡️ ClickSafe — Dashboard</div>
     <div class="header-right">
       <span class="last-updated" id="last-updated">Loading…</span>
       <button class="btn-clear" id="btn-clear">Clear All Data</button>
@@ -515,26 +301,24 @@
 
   <main>
 
-    <!-- SECTION: Overview Stats -->
-    <div class="section-header">
-      <span class="section-title">Feature 15 — Overview</span>
+    <!-- Overview -->
+    <div class="section-header" style="margin-top:0;">
+      <span class="section-title">Overview</span>
       <div class="section-line"></div>
     </div>
 
-    <div class="grid-5" style="margin-bottom:28px;">
-      <!-- Privacy Score Card -->
+    <div class="grid-5">
       <div class="card" style="grid-column: span 2;">
-        <div class="card-glow" style="background:var(--blue);"></div>
         <div class="card-label">🛡️ Privacy Score</div>
         <div class="score-hero">
           <div class="gauge-wrap">
-            <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
-              <circle class="gauge-bg-circle"  cx="60" cy="60" r="50"/>
+            <svg viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
+              <circle class="gauge-bg-circle"  cx="55" cy="55" r="45"/>
               <circle class="gauge-arc-circle" id="dash-gauge-arc"
-                cx="60" cy="60" r="50"
-                stroke-dasharray="314.16"
-                stroke-dashoffset="314.16"
-                stroke="#3b82f6"/>
+                cx="55" cy="55" r="45"
+                stroke-dasharray="282.74"
+                stroke-dashoffset="282.74"
+                stroke="#16a34a"/>
             </svg>
             <div class="gauge-center">
               <span class="gauge-num" id="dash-score">—</span>
@@ -552,73 +336,65 @@
       </div>
 
       <div class="card">
-        <div class="card-glow" style="background:var(--red);"></div>
         <div class="card-label">🍪 Cookie Trackers</div>
-        <div class="card-value" style="color:var(--red);" id="dash-cookie-trackers">0</div>
+        <div class="card-value" style="color:#dc2626;" id="dash-cookie-trackers">0</div>
         <div class="card-sub">Session total</div>
       </div>
 
       <div class="card">
-        <div class="card-glow" style="background:var(--orange);"></div>
         <div class="card-label">🔍 Tracker Scripts</div>
-        <div class="card-value" style="color:var(--orange);" id="dash-tracker-scripts">0</div>
+        <div class="card-value" style="color:#ea580c;" id="dash-tracker-scripts">0</div>
         <div class="card-sub">Session total</div>
       </div>
 
       <div class="card">
-        <div class="card-glow" style="background:var(--purple);"></div>
         <div class="card-label">🚨 Dark Patterns</div>
-        <div class="card-value" style="color:var(--purple);" id="dash-dark-patterns">0</div>
+        <div class="card-value" style="color:#7c3aed;" id="dash-dark-patterns">0</div>
         <div class="card-sub">All time</div>
       </div>
     </div>
 
-    <div class="grid-5" style="margin-bottom:28px;">
+    <div class="grid-5">
       <div class="card">
-        <div class="card-glow" style="background:var(--cyan);"></div>
         <div class="card-label">⚠️ Mixed Content</div>
-        <div class="card-value" style="color:var(--cyan);" id="dash-mixed">0</div>
+        <div class="card-value" style="color:#0891b2;" id="dash-mixed">0</div>
         <div class="card-sub">Session total</div>
       </div>
 
       <div class="card">
-        <div class="card-glow" style="background:var(--green);"></div>
         <div class="card-label">🔗 Links Checked</div>
-        <div class="card-value" style="color:var(--green);" id="dash-links">0</div>
+        <div class="card-value" style="color:#16a34a;" id="dash-links">0</div>
         <div class="card-sub">Session total</div>
       </div>
 
       <div class="card">
-        <div class="card-glow" style="background:var(--yellow);"></div>
         <div class="card-label">⬇️ Downloads Scanned</div>
-        <div class="card-value" style="color:var(--yellow);" id="dash-downloads">0</div>
+        <div class="card-value" style="color:#1e40af;" id="dash-downloads">0</div>
         <div class="card-sub">All time</div>
       </div>
 
       <div class="card">
-        <div class="card-glow" style="background:var(--blue);"></div>
         <div class="card-label">🔒 HTTPS Redirects</div>
-        <div class="card-value" style="color:var(--blue);" id="dash-https">0</div>
+        <div class="card-value" style="color:#1e40af;" id="dash-https">0</div>
         <div class="card-sub">All time</div>
       </div>
 
       <div class="card">
-        <div class="card-glow" style="background:var(--pink);"></div>
         <div class="card-label">🛑 Threats Blocked</div>
-        <div class="card-value" style="color:var(--pink);" id="dash-blocked">0</div>
+        <div class="card-value" style="color:#dc2626;" id="dash-blocked">0</div>
         <div class="card-sub">All time</div>
       </div>
     </div>
 
-    <!-- SECTION: Heatmap -->
+    <!-- Heatmap -->
     <div class="section-header">
-      <span class="section-title">Feature 16 — 7-Day Threat Heatmap</span>
+      <span class="section-title">7-Day Threat Heatmap</span>
       <div class="section-line"></div>
     </div>
 
-    <div class="card" style="margin-bottom:28px;">
-      <div class="card-label" style="margin-bottom:16px;">Daily threat intensity — last 7 days</div>
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:6px;">
+    <div class="card">
+      <div class="card-label" style="margin-bottom:14px;">Daily threat intensity — last 7 days</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:5px;">
         <div class="heatmap-day-label" id="hm-d0"></div>
         <div class="heatmap-day-label" id="hm-d1"></div>
         <div class="heatmap-day-label" id="hm-d2"></div>
@@ -631,54 +407,52 @@
       <div class="heatmap-legend">
         <span>Less</span>
         <div class="heatmap-legend-cells">
-          <div class="heatmap-legend-cell" style="background:var(--surface2);"></div>
-          <div class="heatmap-legend-cell" style="background:rgba(239,68,68,0.2);"></div>
-          <div class="heatmap-legend-cell" style="background:rgba(239,68,68,0.45);"></div>
-          <div class="heatmap-legend-cell" style="background:rgba(239,68,68,0.7);"></div>
-          <div class="heatmap-legend-cell" style="background:rgba(239,68,68,1);"></div>
+          <div class="heatmap-legend-cell" style="background:#f3f4f6;border:1px solid #e5e7eb;"></div>
+          <div class="heatmap-legend-cell" style="background:rgba(220,38,38,0.2);"></div>
+          <div class="heatmap-legend-cell" style="background:rgba(220,38,38,0.45);"></div>
+          <div class="heatmap-legend-cell" style="background:rgba(220,38,38,0.7);"></div>
+          <div class="heatmap-legend-cell" style="background:rgb(220,38,38);"></div>
         </div>
         <span>More</span>
       </div>
     </div>
 
-    <!-- SECTION: Charts -->
+    <!-- Charts -->
     <div class="section-header">
-      <span class="section-title">Feature 17 — Threat Breakdown</span>
+      <span class="section-title">Threat Breakdown</span>
       <div class="section-line"></div>
     </div>
 
-    <div class="grid-2" style="margin-bottom:28px;">
-      <!-- Donut chart -->
+    <div class="grid-2">
       <div class="card">
-        <div class="card-label" style="margin-bottom:16px;">Threat type distribution</div>
-        <div style="position:relative;width:200px;height:200px;margin:0 auto;">
+        <div class="card-label" style="margin-bottom:14px;">Threat type distribution</div>
+        <div style="position:relative;width:190px;height:190px;margin:0 auto;">
           <canvas id="donut-chart"></canvas>
           <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;">
-            <span style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;" id="donut-total">0</span>
-            <span style="font-size:10px;color:var(--muted);">total</span>
+            <span style="font-size:22px;font-weight:700;color:#111827;" id="donut-total">0</span>
+            <span style="font-size:10px;color:#9ca3af;">total</span>
           </div>
         </div>
-        <div id="donut-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;justify-content:center;"></div>
+        <div id="donut-legend" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;justify-content:center;"></div>
       </div>
 
-      <!-- Timeline line chart -->
       <div class="card">
-        <div class="card-label" style="margin-bottom:16px;">Feature 19 — Threat activity (last 24h)</div>
+        <div class="card-label" style="margin-bottom:14px;">Threat activity — last 24h</div>
         <div class="chart-wrap">
           <canvas id="timeline-chart"></canvas>
         </div>
       </div>
     </div>
 
-    <!-- SECTION: Top Domains -->
+    <!-- Top Domains + Feature Status -->
     <div class="section-header">
-      <span class="section-title">Feature 18 — Top Tracking Domains</span>
+      <span class="section-title">Top Tracking Domains</span>
       <div class="section-line"></div>
     </div>
 
-    <div class="grid-2" style="margin-bottom:28px;">
+    <div class="grid-2">
       <div class="card">
-        <div class="card-label" style="margin-bottom:16px;">Most seen tracker domains</div>
+        <div class="card-label" style="margin-bottom:14px;">Most seen tracker domains</div>
         <div class="domain-list" id="domain-list">
           <div class="empty-state">
             <div class="empty-icon">🔍</div>
@@ -687,10 +461,9 @@
         </div>
       </div>
 
-      <!-- Feature status -->
       <div class="card">
         <div class="card-label" style="margin-bottom:12px;">Active protection features</div>
-        <div id="feature-status-list">
+        <div>
           <div class="feature-status">
             <div class="status-dot on" id="fs-https"></div>
             <span class="status-name">Auto-HTTPS Redirect</span>
@@ -712,7 +485,7 @@
             <span class="status-count" id="fs-downloads-count">—</span>
           </div>
           <div class="feature-status">
-            <div class="status-dot on"></div>
+            <div class="status-dot on" id="fs-darkpatterns"></div>
             <span class="status-name">Dark Pattern Detector</span>
             <span class="status-count" id="fs-dp-count">—</span>
           </div>
@@ -725,14 +498,14 @@
       </div>
     </div>
 
-    <!-- SECTION: Dark Pattern Log -->
+    <!-- Dark Pattern Log -->
     <div class="section-header">
-      <span class="section-title">Feature 20 — Dark Pattern Log</span>
+      <span class="section-title">Dark Pattern Log</span>
       <div class="section-line"></div>
     </div>
 
-    <div class="card" style="margin-bottom:28px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <div class="card" style="margin-bottom:40px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
         <div class="card-label">All detected dark patterns</div>
         <div style="display:flex;gap:6px;" id="dp-filters">
           <button class="dp-filter active" data-type="all">All</button>
@@ -767,26 +540,6 @@
     </div>
 
   </main>
-
-  <style>
-    .dp-filter {
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      color: var(--muted);
-      padding: 4px 10px;
-      border-radius: 5px;
-      font-size: 11px;
-      cursor: pointer;
-      font-family: 'DM Sans', sans-serif;
-      transition: all 0.15s;
-    }
-    .dp-filter:hover { color: var(--text); }
-    .dp-filter.active {
-      background: var(--blue);
-      border-color: var(--blue);
-      color: white;
-    }
-  </style>
 
   <script src="dashboard.js"></script>
 </body>

@@ -9,6 +9,7 @@ const defaults = {
   linksEnabled: true,
   downloadsEnabled: true,
   modalsEnabled: true,
+  darkPatternsEnabled: true,
   whitelist: []
 };
 
@@ -21,6 +22,7 @@ chrome.storage.local.get(["settings"], function (result) {
   document.getElementById("toggle-links").checked = settings.linksEnabled;
   document.getElementById("toggle-downloads").checked = settings.downloadsEnabled;
   document.getElementById("toggle-modals").checked = settings.modalsEnabled;
+  document.getElementById("toggle-darkpatterns").checked = settings.darkPatternsEnabled !== false;
 
   renderWhitelist(settings.whitelist || []);
 });
@@ -77,6 +79,7 @@ document.getElementById("save-btn").addEventListener("click", function () {
     linksEnabled: document.getElementById("toggle-links").checked,
     downloadsEnabled: document.getElementById("toggle-downloads").checked,
     modalsEnabled: document.getElementById("toggle-modals").checked,
+    darkPatternsEnabled: document.getElementById("toggle-darkpatterns").checked,
     whitelist: whitelist
   };
 

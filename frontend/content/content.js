@@ -520,8 +520,13 @@ function showDarkPatternBadge(count) {
   setTimeout(() => badge?.remove(), 8000);
 }
 
-runDarkPatternDetector();
-setTimeout(runDarkPatternDetector, 2500);
+// Respect darkPatternsEnabled setting before running detector
+chrome.storage.local.get(['settings'], function(result) {
+  const settings = result.settings || {};
+  if (settings.darkPatternsEnabled === false) return;
+  runDarkPatternDetector();
+  setTimeout(runDarkPatternDetector, 2500);
+});
 
 
 // ============================================================
